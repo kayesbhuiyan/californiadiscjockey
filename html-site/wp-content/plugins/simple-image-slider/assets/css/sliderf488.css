@@ -1,0 +1,192 @@
+/* =====================================================
+   Simple Image Slider — Frontend Styles
+   All rules scoped under .sis-slider-wrapper to avoid
+   conflicts with themes and other plugins.
+   ===================================================== */
+
+.sis-slider-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    background: #000;
+    -webkit-user-select: none;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+/* ---- Slider track ---- */
+.sis-slider-wrapper .sis-slider {
+    position: relative;
+    width: 100%;
+    /* Height held by the active slide; others are absolute-positioned */
+    overflow: hidden;
+}
+
+/* ---- Slides: hidden by default ---- */
+.sis-slider-wrapper .sis-slide {
+    /* Non-fade mode */
+    display: none;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sis-slider-wrapper .sis-slide.sis-active {
+    display: block;
+}
+
+/* ---- Fade mode (class added by JS) ---- */
+/*
+   Height trick: the active slide is in-flow (position:relative) so
+   the wrapper gets its natural height. All other slides are stacked
+   on top via position:absolute so they don't affect layout height.
+*/
+.sis-slider-wrapper.sis-fade .sis-slider {
+    /* nothing extra needed here */
+}
+
+.sis-slider-wrapper.sis-fade .sis-slide {
+    display: block;          /* always rendered, opacity controls visibility */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    -webkit-transition: opacity 0.6s ease;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.sis-slider-wrapper.sis-fade .sis-slide.sis-active {
+    position: relative;     /* in-flow → provides height to parent */
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+}
+
+/* ---- Images ---- */
+.sis-slider-wrapper .sis-slide img {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 600px !important;
+    object-fit: cover !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* ---- Caption ---- */
+.sis-slider-wrapper .sis-caption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff !important;
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+    text-align: center !important;
+    box-sizing: border-box;
+    z-index: 5;
+}
+
+/* ---- Arrow buttons ---- */
+.sis-slider-wrapper .sis-arrow {
+    position: absolute !important;
+    top: 50% !important;
+    -webkit-transform: translateY(-50%) !important;
+    transform: translateY(-50%) !important;
+    z-index: 20 !important;
+    background: rgba(0,0,0,0.45) !important;
+    color: #fff !important;
+    border: none !important;
+    cursor: pointer !important;
+    font-size: 36px !important;
+    line-height: 1 !important;
+    width: 48px !important;
+    height: 64px !important;
+    display: -webkit-box !important;
+    display: flex !important;
+    -webkit-box-align: center !important;
+    align-items: center !important;
+    -webkit-box-pack: center !important;
+    justify-content: center !important;
+    -webkit-transition: background 0.2s !important;
+    transition: background 0.2s !important;
+    padding: 0 !important;
+    border-radius: 2px !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    text-decoration: none !important;
+}
+
+.sis-slider-wrapper .sis-arrow:hover,
+.sis-slider-wrapper .sis-arrow:focus {
+    background: rgba(0,0,0,0.75) !important;
+    outline: none !important;
+    color: #fff !important;
+}
+
+.sis-slider-wrapper .sis-prev { left: 0 !important; right: auto !important; }
+.sis-slider-wrapper .sis-next { right: 0 !important; left: auto !important; }
+
+/* ---- Dot navigation ---- */
+.sis-slider-wrapper .sis-dots {
+    position: absolute !important;
+    bottom: 12px !important;
+    left: 50% !important;
+    -webkit-transform: translateX(-50%) !important;
+    transform: translateX(-50%) !important;
+    display: -webkit-box !important;
+    display: flex !important;
+    gap: 8px !important;
+    z-index: 20 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style: none !important;
+}
+
+.sis-slider-wrapper .sis-dot {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    border: 2px solid #fff !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    -webkit-transition: background 0.2s, -webkit-transform 0.2s !important;
+    transition: background 0.2s, transform 0.2s !important;
+    display: inline-block !important;
+    box-shadow: none !important;
+}
+
+.sis-slider-wrapper .sis-dot.sis-active,
+.sis-slider-wrapper .sis-dot:hover {
+    background: #fff !important;
+    -webkit-transform: scale(1.2) !important;
+    transform: scale(1.2) !important;
+}
+
+.sis-slider-wrapper .sis-dot:focus {
+    outline: 2px solid rgba(255,255,255,0.8) !important;
+    outline-offset: 2px !important;
+}
+
+/* ---- Responsive ---- */
+@media ( max-width: 600px ) {
+    .sis-slider-wrapper .sis-arrow {
+        width: 36px !important;
+        height: 50px !important;
+        font-size: 26px !important;
+    }
+
+    .sis-slider-wrapper .sis-caption {
+        font-size: 13px !important;
+        padding: 8px 14px !important;
+    }
+}
