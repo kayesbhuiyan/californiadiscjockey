@@ -4,7 +4,16 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   skipTrailingSlashRedirect: true,
-  images: { unoptimized: true },
+  images: {
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 2592000,
+  },
+  outputFileTracingIncludes: {
+    "/[[...path]]": ["./html-site/**/*"],
+    "/**": ["./html-site/**/*"],
+  },
 };
 
 export default nextConfig;

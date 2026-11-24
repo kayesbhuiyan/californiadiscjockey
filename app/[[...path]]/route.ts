@@ -8,6 +8,7 @@ import {
   renderSitemap,
   resolveRequest,
   rewriteAssetText,
+  renderPageCss,
   rewriteHtml,
 } from "@/lib/site";
 
@@ -17,13 +18,16 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ path?: string[] }> };
 
 function textResponse(body: string, contentType: string, status = 200) {
+  const cacheable = /css|javascript|font|image/.test(contentType);
   return new Response(body, {
     status,
     headers: {
       "content-type": contentType,
       "cache-control": contentType.includes("text/html")
         ? "public, max-age=0, must-revalidate"
-        : "public, max-age=3600",
+        : cacheable
+          ? "public, max-age=31536000, immutable"
+          : "public, max-age=3600",
       "x-content-type-options": "nosniff",
     },
   });
@@ -54,6 +58,14 @@ function notFound() {
 
 async function serve(request: Request) {
   const url = new URL(request.url);
+  if (url.pathname === "/_css") {
+    const page = url.searchParams.get("p") || "/";
+    const kind = url.searchParams.get("k") === "defer" ? "defer" : "block";
+    const css = renderPageCss(page, kind);
+    if (css == null) return notFound();
+    return textResponse(css, "text/css; charset=utf-8");
+  }
+
   const resolved = resolveRequest(url.pathname);
   if (!resolved) return notFound();
 
@@ -93,7 +105,7 @@ async function serve(request: Request) {
   return new Response(stream, {
     headers: {
       "content-type": contentTypeFor(resolved.file),
-      "cache-control": "public, max-age=86400",
+      "cache-control": "public, max-age=31536000, immutable",
       "x-content-type-options": "nosniff",
     },
   });
