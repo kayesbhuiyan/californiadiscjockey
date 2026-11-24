@@ -4,6 +4,7 @@ import {
   canonicalPathForFile,
   contentTypeFor,
   isTextAsset,
+  isVercelAppHost,
   renderRobots,
   renderSitemap,
   resolveRequest,
@@ -17,29 +18,45 @@ export const dynamic = "force-dynamic";
 
 type Context = { params: Promise<{ path?: string[] }> };
 
-function textResponse(body: string, contentType: string, status = 200) {
-  const cacheable = /css|javascript|font|image/.test(contentType);
-  return new Response(body, {
-    status,
-    headers: {
-      "content-type": contentType,
-      "cache-control": contentType.includes("text/html")
-        ? "public, max-age=0, must-revalidate"
-        : cacheable
-          ? "public, max-age=31536000, immutable"
-          : "public, max-age=3600",
-      "x-content-type-options": "nosniff",
-    },
-  });
+function requestHost(request: Request) {
+  return (request.headers.get("x-forwarded-host") || request.headers.get("host") || new URL(request.url).host)
+    .split(",")[0]
+    .trim();
 }
 
-function notFound() {
+function blockIndexingFor(request: Request) {
+  return isVercelAppHost(requestHost(request));
+}
+
+function textResponse(
+  body: string,
+  contentType: string,
+  status = 200,
+  options?: { blockIndexing?: boolean },
+) {
+  const cacheable = /css|javascript|font|image/.test(contentType);
+  const headers: Record<string, string> = {
+    "content-type": contentType,
+    "cache-control": contentType.includes("text/html")
+      ? "public, max-age=0, must-revalidate"
+      : cacheable
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=3600",
+    "x-content-type-options": "nosniff",
+  };
+  if (options?.blockIndexing && contentType.includes("text/html")) {
+    headers["x-robots-tag"] = "noindex, nofollow";
+  }
+  return new Response(body, { status, headers });
+}
+
+function notFound(blockIndexing = false) {
   const html = `<!DOCTYPE html>
 <html lang="en-US">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex, nofollow">
 <title>Page not found &#8211; California disc jockey</title>
 </head>
 <body style="margin:0;background:#fff;color:#303030;font-family:Arial,Helvetica,sans-serif;">
@@ -53,21 +70,23 @@ function notFound() {
 </main>
 </body>
 </html>`;
-  return textResponse(html, "text/html; charset=utf-8", 404);
+  return textResponse(html, "text/html; charset=utf-8", 404, { blockIndexing });
 }
 
 async function serve(request: Request) {
   const url = new URL(request.url);
+  const blockIndexing = blockIndexingFor(request);
+
   if (url.pathname === "/_css") {
     const page = url.searchParams.get("p") || "/";
     const kind = url.searchParams.get("k") === "defer" ? "defer" : "block";
     const css = renderPageCss(page, kind);
-    if (css == null) return notFound();
+    if (css == null) return notFound(blockIndexing);
     return textResponse(css, "text/css; charset=utf-8");
   }
 
   const resolved = resolveRequest(url.pathname);
-  if (!resolved) return notFound();
+  if (!resolved) return notFound(blockIndexing);
 
   if (resolved.type === "redirect") {
     const target = new URL(resolved.to + url.search, url);
@@ -75,24 +94,30 @@ async function serve(request: Request) {
   }
 
   if (resolved.type === "sitemap") {
+    if (blockIndexing) {
+      return textResponse(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>\n`,
+        "application/xml; charset=utf-8",
+      );
+    }
     return textResponse(renderSitemap(), "application/xml; charset=utf-8");
   }
 
   if (resolved.type === "robots") {
-    return textResponse(renderRobots(), "text/plain; charset=utf-8");
+    return textResponse(renderRobots({ blockIndexing }), "text/plain; charset=utf-8");
   }
 
   if (resolved.type === "page") {
     const raw = readFileSync(resolved.file, "utf8");
-    const html = rewriteHtml(raw, resolved.canonicalPath, resolved.forceNoindex);
-    return textResponse(html, contentTypeFor(resolved.file, html));
+    const html = rewriteHtml(raw, resolved.canonicalPath, resolved.forceNoindex, { blockIndexing });
+    return textResponse(html, contentTypeFor(resolved.file, html), 200, { blockIndexing });
   }
 
   const assetUrl = canonicalPathForFile(resolved.file);
   if (assetUrl.toLowerCase().endsWith(".html")) {
     const raw = readFileSync(resolved.file, "utf8");
-    const html = rewriteHtml(raw, assetUrl, true);
-    return textResponse(html, contentTypeFor(resolved.file, html));
+    const html = rewriteHtml(raw, assetUrl, true, { blockIndexing });
+    return textResponse(html, contentTypeFor(resolved.file, html), 200, { blockIndexing });
   }
 
   if (isTextAsset(resolved.file)) {

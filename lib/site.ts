@@ -216,7 +216,15 @@ export function renderSitemap() {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
-export function renderRobots() {
+export function isVercelAppHost(host: string) {
+  const hostname = host.split(":")[0].toLowerCase();
+  return hostname === "vercel.app" || hostname.endsWith(".vercel.app");
+}
+
+export function renderRobots(options?: { blockIndexing?: boolean }) {
+  if (options?.blockIndexing) {
+    return `User-agent: *\nDisallow: /\n`;
+  }
   return `User-agent: *\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-json/\nDisallow: /wp-login\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`;
 }
 
@@ -360,14 +368,12 @@ function forceSeoUrls(html: string, canonical: string) {
   return next;
 }
 
-function forceNoindex(html: string) {
+function forceNoindex(html: string, directive = "noindex, follow") {
+  const tag = `<meta name="robots" content="${directive}" />`;
   if (/<meta\b[^>]*name=(["'])robots\1[^>]*>/i.test(html)) {
-    return html.replace(
-      /<meta\b[^>]*name=(["'])robots\1[^>]*>/i,
-      '<meta name="robots" content="noindex, follow" />',
-    );
+    return html.replace(/<meta\b[^>]*name=(["'])robots\1[^>]*>/i, tag);
   }
-  return html.replace(/<head[^>]*>/i, `$&\n<meta name="robots" content="noindex, follow" />`);
+  return html.replace(/<head[^>]*>/i, `$&\n${tag}`);
 }
 
 function revealLazyImages(html: string) {
@@ -766,7 +772,12 @@ document.addEventListener("click",(event)=>{
   return next;
 }
 
-export function rewriteHtml(html: string, canonicalPath: string, noindex: boolean) {
+export function rewriteHtml(
+  html: string,
+  canonicalPath: string,
+  noindex: boolean,
+  options?: { blockIndexing?: boolean },
+) {
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
   const pageUrl = new URL(canonical);
   const protectedSeo = protectSeoBlocks(html);
@@ -799,7 +810,8 @@ export function rewriteHtml(html: string, canonicalPath: string, noindex: boolea
   next = revealLazyImages(next);
   next = forceSeoUrls(next, canonical);
   next = absolutizeMetaImages(next);
-  if (noindex) next = forceNoindex(next);
+  if (options?.blockIndexing) next = forceNoindex(next, "noindex, nofollow");
+  else if (noindex) next = forceNoindex(next);
   next = optimizeHtml(next, canonicalPath);
   return restoreSeoBlocks(next, protectedSeo.blocks);
 }
