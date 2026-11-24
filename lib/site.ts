@@ -509,7 +509,7 @@ function videoPoster(src: string) {
   const youtube = src.match(/(?:youtube\.com\/(?:embed\/|shorts\/|watch\?v=)|youtube-nocookie\.com\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})/);
   if (youtube) return `https://i.ytimg.com/vi/${youtube[1]}/hqdefault.jpg`;
   const instagram = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
-  if (instagram) return `https://www.instagram.com/p/${instagram[1]}/media/?size=m`;
+  if (instagram) return `https://www.instagram.com/p/${instagram[1]}/media/?size=l`;
   const vimeo = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
   return "";
@@ -559,7 +559,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
     deferCss
       ? `<link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer"></noscript>`
       : "",
-    `<style id="cdj-speed">.elementor-invisible{visibility:visible!important}.cdj-lite{display:block;position:relative;width:100%;margin:0;padding:0;border:0;background:#111;color:#fff;cursor:pointer;overflow:hidden}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%)}.cdj-lite span{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1}.cdj-lite span:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.entry-content a,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}.sis-slider-wrapper .sis-dots{gap:12px !important}.sis-slider-wrapper .sis-dots .sis-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;transform:none !important}html.cdj-nav{cursor:progress}.dj-container .dj-button{background:#e8c96a !important;color:#1a1a1a !important}.dj-container .dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}</style>`,
+    `<style id="cdj-speed">.elementor-invisible{visibility:visible!important}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite span{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite span:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.entry-content a,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}.sis-slider-wrapper .sis-dots{gap:12px !important}.sis-slider-wrapper .sis-dots .sis-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;transform:none !important}html.cdj-nav{cursor:progress}.dj-container .dj-button{background:#e8c96a !important;color:#1a1a1a !important}.dj-container .dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
@@ -621,10 +621,15 @@ function optimizeHtml(html: string, canonicalPath: string) {
     }
     const title = (readAttr(tag, "title") || "video").replace(/"/g, "&quot;");
     const playable = src.includes("autoplay=") ? src : `${src}${src.includes("?") ? "&" : "?"}autoplay=1`;
-    const ratio = /instagram\.com\/reel|instagram\.com\/p/i.test(src) ? "9/16" : "16/9";
+    const ratio = "16/9";
     const poster = videoPoster(src);
+    const youtubeId = poster.includes("i.ytimg.com/vi/") ? poster.match(/\/vi\/([^/]+)\//)?.[1] : "";
     const image = poster
-      ? `<img src="${poster}" alt="" width="${ratio === "9/16" ? "360" : "480"}" height="${ratio === "9/16" ? "640" : "360"}" loading="lazy" decoding="async" fetchpriority="low">`
+      ? `<img src="${poster}" alt="" width="480" height="360" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer"${
+          youtubeId
+            ? ` onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg'"`
+            : ` onerror="this.remove()"`
+        }>`
       : "";
     return `<button type="button" class="cdj-lite" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}">${image}<span></span></button>`;
   });
