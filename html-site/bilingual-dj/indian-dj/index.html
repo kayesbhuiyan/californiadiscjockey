@@ -3093,17 +3093,43 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
   function fitInstagram() {
     var width = screenWidth();
     var crops = document.querySelectorAll("#bay-area-dj-page .dj-ig-crop");
-    for (var i = 0; i < crops.length; i++) { var crop = crops[i]; crop.style.setProperty("width", width + "px", "important"); crop.style.setProperty("max-width", width + "px", "important"); crop.style.setProperty("margin-right", "0px", "important"); crop.style.setProperty("margin-left", "0px", "important"); var left = crop.getBoundingClientRect().left; crop.style.setProperty("margin-left", (-left) + "px", "important"); var leftAgain = crop.getBoundingClientRect().left; if (Math.abs(leftAgain) > 0.5) {
-        crop.style.setProperty("margin-left", ((-left) - leftAgain) + "px", "important");
-      }
+    for (var i = 0; i < crops.length; i++) {
+      var crop = crops[i];
       var canvas = crop.querySelector(".dj-ig-canvas");
       if (!canvas) continue;
+      // Click-to-play placeholders must stay unscaled; the old crop math is for iframes only.
+      if (crop.querySelector(".cdj-lite")) {
+        crop.style.setProperty("width", "100%", "important");
+        crop.style.setProperty("max-width", "100%", "important");
+        crop.style.setProperty("margin-left", "0px", "important");
+        crop.style.setProperty("margin-right", "0px", "important");
+        crop.style.setProperty("aspect-ratio", "16 / 9", "important");
+        crop.style.setProperty("height", "auto", "important");
+        canvas.style.setProperty("position", "relative", "important");
+        canvas.style.setProperty("inset", "auto", "important");
+        canvas.style.setProperty("width", "100%", "important");
+        canvas.style.setProperty("height", "auto", "important");
+        canvas.style.setProperty("transform", "none", "important");
+        canvas.style.setProperty("transform-origin", "initial", "important");
+        continue;
+      }
+      crop.style.setProperty("width", width + "px", "important");
+      crop.style.setProperty("max-width", width + "px", "important");
+      crop.style.setProperty("margin-right", "0px", "important");
+      crop.style.setProperty("margin-left", "0px", "important");
+      var left = crop.getBoundingClientRect().left;
+      crop.style.setProperty("margin-left", (-left) + "px", "important");
+      var leftAgain = crop.getBoundingClientRect().left;
+      if (Math.abs(leftAgain) > 0.5) {
+        crop.style.setProperty("margin-left", ((-left) - leftAgain) + "px", "important");
+      }
       var base = crop.id === "dj-ig-party" ? 540 : 379.6875;
       var shift = crop.id === "dj-ig-party" ? "translateY(-54px)" : "translate(-80.15625px, -284.625px)";
       canvas.style.setProperty("transform-origin", "0 0", "important");
       canvas.style.setProperty("transform", "scale(" + (width / base) + ") " + shift, "important");
     }
   }
+  window.cdjFitInstagram = fitInstagram;
   fitInstagram();
   window.addEventListener("resize", fitInstagram);
   window.addEventListener("orientationchange", fitInstagram);

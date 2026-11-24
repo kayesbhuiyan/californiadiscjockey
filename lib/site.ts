@@ -5,7 +5,7 @@ import { scrubCss, scrubHtmlFootprints } from "@/lib/scrub";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "3";
+export const CSS_BUNDLE_VERSION = "4";
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
 
@@ -736,6 +736,28 @@ function navUrl(link){
   if(url.origin!==location.origin)return null;
   return url;
 }
+function normalizeIgLite(){
+  document.querySelectorAll(".dj-ig-crop").forEach((crop)=>{
+    if(!crop.querySelector(".cdj-lite"))return;
+    const canvas=crop.querySelector(".dj-ig-canvas");
+    crop.style.setProperty("width","100%","important");
+    crop.style.setProperty("max-width","100%","important");
+    crop.style.setProperty("margin-left","0px","important");
+    crop.style.setProperty("margin-right","0px","important");
+    crop.style.setProperty("aspect-ratio","16 / 9","important");
+    crop.style.setProperty("height","auto","important");
+    if(!canvas)return;
+    canvas.style.setProperty("position","relative","important");
+    canvas.style.setProperty("inset","auto","important");
+    canvas.style.setProperty("width","100%","important");
+    canvas.style.setProperty("height","auto","important");
+    canvas.style.setProperty("transform","none","important");
+    canvas.style.setProperty("transform-origin","initial","important");
+  });
+}
+normalizeIgLite();
+setTimeout(normalizeIgLite,350);
+setTimeout(normalizeIgLite,1250);
 function loadPage(url){
   const key=url.pathname+url.search;
   if(pageCache.has(key))return pageCache.get(key);
@@ -783,6 +805,7 @@ async function showPage(url,replace){
     document.body.replaceWith(doc.body);
     document.title=title;
     runScripts(document.body);
+    normalizeIgLite();
     const next=url.pathname+url.search+url.hash;
     if(replace)history.replaceState({cdj:1},"",next);
     else history.pushState({cdj:1},"",next);
@@ -843,7 +866,9 @@ document.addEventListener("click",(event)=>{
       frame.style.width="100%";
       frame.style.aspectRatio=lite.dataset.ratio||"16/9";
     }
+    const crop=lite.closest(".dj-ig-crop");
     lite.replaceWith(frame);
+    if(crop&&typeof window.cdjFitInstagram==="function")window.cdjFitInstagram();
     return;
   }
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
