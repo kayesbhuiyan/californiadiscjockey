@@ -487,7 +487,9 @@ function localStylesheets(raw: string, pageFile: string) {
     if (!file || !isInsideRoot(file) || !fs.existsSync(file)) continue;
     const publicHref = canonicalPathForFile(file);
     const media = (readAttr(tag, "media") || "all").toLowerCase();
-    const defer = media === "print" || /font|roboto|tw_optimize/i.test(publicHref);
+    const defer =
+      media === "print" ||
+      /font|roboto|tw_optimize|\/assets\/critical\/|uncritical/i.test(`${publicHref} ${tag}`);
     sheets.push({ href: publicHref, file, defer });
   }
   return sheets;
