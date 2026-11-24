@@ -669,6 +669,15 @@ function optimizeHtml(html: string, canonicalPath: string) {
   });
   if (lcp) next = next.replace(/<\/head>/i, `${lcp}</head>`);
 
+  next = next.replace(/<video\b[^>]*>/gi, (tag) => {
+    let updated = setAttr(tag, "preload", "none");
+    const poster = readAttr(updated, "poster") || "";
+    if (!poster || poster.startsWith("data:") || poster.startsWith("/_next/image")) return updated;
+    const optimized = optimizedImage(poster, readAttr(updated, "width") || "720");
+    if (optimized) updated = setAttr(updated, "poster", optimized.src);
+    return updated;
+  });
+
   next = next.replace(/<thead\b[^>]*>[\s\S]*?<\/thead>/gi, (thead) =>
     thead.replace(/<td\b/gi, "<th").replace(/<\/td>/gi, "</th>"),
   );
