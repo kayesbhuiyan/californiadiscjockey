@@ -565,6 +565,11 @@ function videoPoster(src: string) {
   if (youtube) return `https://i.ytimg.com/vi/${youtube[1]}/hqdefault.jpg`;
   const vimeo = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
+  const instagram = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i);
+  if (instagram) {
+    const local = `/media/instagram/${instagram[1]}.jpg`;
+    if (lookupFile(local)) return local;
+  }
   return "";
 }
 
@@ -625,7 +630,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
     deferCss
       ? `<link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}"></noscript>`
       : "",
-    `<style id="cdj-speed">.elementor-invisible{visibility:visible!important}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}.dj-container .dj-button{background:#e8c96a !important;color:#1a1a1a !important}.dj-container .dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}</style>`,
+    `<style id="cdj-speed">.elementor-invisible{visibility:visible!important}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}.dj-container .dj-button{background:#e8c96a !important;color:#1a1a1a !important}.dj-container .dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
@@ -703,18 +708,26 @@ function optimizeHtml(html: string, canonicalPath: string) {
         ? src
         : `${src}${src.includes("?") ? "&" : "?"}autoplay=1`;
     const ratio = "16/9";
-    if (isInstagram) {
-      return `<button type="button" class="cdj-lite cdj-lite--ig" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}"><span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span><span class="cdj-play"></span></button>`;
-    }
     const poster = videoPoster(src);
     const youtubeId = poster.includes("i.ytimg.com/vi/") ? poster.match(/\/vi\/([^/]+)\//)?.[1] : "";
+    const optimized = poster.startsWith("/media/") ? optimizedImage(poster, "840") : null;
+    const imageSrc = optimized?.src || poster;
     const image = poster
-      ? `<img src="${poster}" alt="" width="480" height="360" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer"${
+      ? `<img src="${imageSrc}" alt="" width="480" height="360" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer"${
+          optimized?.srcset ? ` srcset="${optimized.srcset}" sizes="(max-width: 840px) 100vw, 840px"` : ""
+        }${
           youtubeId
             ? ` onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg'"`
             : ` onerror="this.remove()"`
         }>`
       : "";
+    if (isInstagram) {
+      // Prefer a real thumbnail when we have one; otherwise keep the Instagram face fallback.
+      const face = image
+        ? ""
+        : `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`;
+      return `<button type="button" class="cdj-lite cdj-lite--ig${image ? " cdj-lite--poster" : ""}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}">${image}${face}<span class="cdj-play"></span></button>`;
+    }
     return `<button type="button" class="cdj-lite" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}">${image}<span class="cdj-play"></span></button>`;
   });
 
