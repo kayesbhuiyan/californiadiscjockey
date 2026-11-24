@@ -14,7 +14,7 @@ import {
 } from "@/lib/site";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 type Context = { params: Promise<{ path?: string[] }> };
 
@@ -38,7 +38,7 @@ function textResponse(
   const headers: Record<string, string> = {
     "content-type": contentType,
     "cache-control": contentType.includes("text/html")
-      ? "public, max-age=0, must-revalidate"
+      ? "public, s-maxage=300, stale-while-revalidate=86400"
       : cacheable
         ? "public, max-age=31536000, immutable"
         : "public, max-age=3600",
