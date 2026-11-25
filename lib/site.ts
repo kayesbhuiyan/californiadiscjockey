@@ -2,15 +2,17 @@ import fs from "fs";
 import path from "path";
 import { isOptimizedImagePath, isStaticPath, rewritePublicPath } from "@/lib/paths";
 import { scrubCss, scrubHtmlFootprints } from "@/lib/scrub";
+import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "40";
+export const CSS_BUNDLE_VERSION = "52";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
 /** Static CDN files (images/videos). Kept out of the serverless function bundle. */
 const PUBLIC_ROOT = path.join(process.cwd(), "public");
+const IMAGE_SIZE_MAP = imageSizes as Record<string, { w: number; h: number }>;
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -497,8 +499,25 @@ function resolveLocalAsset(file: string) {
   return file;
 }
 
+function imageSizeKey(file: string) {
+  let key = file.split("?")[0].split("#")[0].replace(/\\/g, "/");
+  if (/^[A-Za-z]:\//.test(key)) {
+    const idx = key.toLowerCase().indexOf("/media/");
+    if (idx >= 0) key = key.slice(idx);
+    const aidx = key.toLowerCase().indexOf("/assets/");
+    if (aidx >= 0) key = key.slice(aidx);
+  }
+  if (!key.startsWith("/")) key = "/" + key;
+  return key.toLowerCase();
+}
+
 function imageSize(file: string) {
   if (imageSizeCache.has(file)) return imageSizeCache.get(file) ?? null;
+  const mapped = IMAGE_SIZE_MAP[imageSizeKey(file)];
+  if (mapped) {
+    imageSizeCache.set(file, mapped);
+    return mapped;
+  }
   let size: { w: number; h: number } | null = null;
   const resolved = resolveLocalAsset(file);
   if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
@@ -599,7 +618,10 @@ function homeCriticalCss() {
   }
   const raw = fs.readFileSync(home.file, "utf8");
   const match = raw.match(/<style\b[^>]*class=(["'])two_critical_css\1[^>]*>([\s\S]*?)<\/style>/i);
-  homeCriticalCssCache = match ? minifyCss(match[2]) : null;
+  // Drop @font-face from critical CSS — fonts use font-display:optional and block FCP.
+  homeCriticalCssCache = match
+    ? minifyCss(match[2].replace(/@font-face\s*\{[^{}]*\}/gi, ""))
+    : null;
   return homeCriticalCssCache;
 }
 
@@ -669,7 +691,13 @@ export function renderPageCss(pagePath: string, kind: "block" | "defer") {
       return lookupFile(clean) ? full : "none";
     })
     .replace(/src:\s*none(?:\s+format\([^)]*\))?\s*,?/gi, "")
-    .replace(/@font-face\s*\{[^{}]*\}/gi, (block) => (/src\s*:/i.test(block) ? block : ""));
+    .replace(/@font-face\s*\{[^{}]*\}/gi, (block) => {
+      if (!/src\s*:/i.test(block)) return "";
+      if (/font-display\s*:/i.test(block)) {
+        return block.replace(/font-display:\s*[^;]+/gi, "font-display:optional");
+      }
+      return block.replace(/@font-face\s*\{/i, "@font-face{font-display:optional;");
+    });
   const cleaned = minifyCss(scrubCss(css));
   cssBundleCache.set(key, cleaned);
   return cleaned;
@@ -680,30 +708,52 @@ function optimizedImage(src: string, widthAttr: string | undefined) {
   if (!isOptimizedImagePath(pathOnly)) return null;
   if (/\.(svg|gif|ico)$/i.test(pathOnly)) return null;
   const file = lookupFile(pathOnly);
-  if (!file) return null;
-  // Prefer the resolved on-disk public path (handles jpg/jpeg + WP -WxH fallbacks).
+  // On Vercel, public/media is CDN-only (excluded from the function bundle), so
+  // lookupFile/publicFile may miss. Still emit /_next/image URLs for /media paths.
   const publicUrl = (() => {
-    const abs = path.resolve(file);
-    const pub = path.resolve(PUBLIC_ROOT);
-    if (abs === pub || abs.startsWith(pub + path.sep)) {
-      return "/" + path.relative(pub, abs).split(path.sep).join("/");
+    if (file) {
+      const abs = path.resolve(file);
+      const pub = path.resolve(PUBLIC_ROOT);
+      if (abs === pub || abs.startsWith(pub + path.sep)) {
+        return "/" + path.relative(pub, abs).split(path.sep).join("/");
+      }
     }
-    return pathOnly;
+    if (pathOnly.startsWith("/media/") || pathOnly.startsWith("/wp-content/uploads/")) {
+      return rewritePublicPath(pathOnly);
+    }
+    return null;
   })();
+  if (!publicUrl) return null;
+  // Prefer a committed next-gen sibling when present (keeps original PNG/JPG on disk).
+  let serveUrl = publicUrl;
+  let serveFile = file || publicUrl;
+  if (/\.png$/i.test(publicUrl)) {
+    const webp = publicUrl.replace(/\.png$/i, ".webp");
+    if (IMAGE_SIZE_MAP[imageSizeKey(webp)] || publicFile(webp)) {
+      serveUrl = webp;
+      serveFile = publicFile(webp) || webp;
+    }
+  }
   const stated = Number(widthAttr);
-  const widths = IMAGE_WIDTHS.filter((width) => !stated || stated >= 400 || width <= stated * 2 + 40);
+  // Cap srcset to displayed sizes: small/medium content ≤1080; large size-full (~1200px) ≤1200.
+  const maxCandidate =
+    stated > 0 && stated <= 700 ? Math.max(stated * 2, 640) : stated > 1400 ? 1200 : 1080;
+  const widths = IMAGE_WIDTHS.filter(
+    (width) => width <= maxCandidate && (!stated || stated >= 400 || width <= stated * 2 + 40),
+  );
   const chosen = widths.length ? widths : [640];
-  const urlFor = (width: number) => `/_next/image?url=${encodeURIComponent(publicUrl)}&w=${width}&q=75`;
+  const urlFor = (width: number) => `/_next/image?url=${encodeURIComponent(serveUrl)}&w=${width}&q=70`;
+  const defaultSrcWidth = chosen.includes(828) ? 828 : chosen[Math.min(chosen.length - 1, 2)] ?? chosen[0];
   return {
-    file,
-    src: urlFor(chosen[Math.min(chosen.length - 1, 2)] ?? chosen[0]),
+    file: serveFile,
+    src: urlFor(defaultSrcWidth),
     srcset: chosen.map((width) => `${urlFor(width)} ${width}w`).join(", "),
   };
 }
 
 function videoPoster(src: string) {
   const youtube = src.match(/(?:youtube\.com\/(?:embed\/|shorts\/|watch\?v=)|youtube-nocookie\.com\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-  if (youtube) return `https://i.ytimg.com/vi/${youtube[1]}/hqdefault.jpg`;
+  if (youtube) return `https://i.ytimg.com/vi/${youtube[1]}/mqdefault.jpg`;
   const vimeo = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
   const instagram = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i);
@@ -741,9 +791,15 @@ function optimizeHtml(html: string, canonicalPath: string) {
       .replace(/#20a0cf/gi, "#2278b0")
       .replace(/#ff6600/gi, "#e85d00")
       .replace(/(\.banner\s+a\[href\^=["']tel:["']\]\s*\{\s*color\s*:\s*)#ff0000/gi, "$1#c00000");
+    const id = (/id=(["'])([^"']+)\1/i.exec(attrs)?.[2] || "").toLowerCase();
+    const cls = (/class=(["'])([^"']+)\1/i.exec(attrs)?.[2] || "").toLowerCase();
+    // Critical path CSS should not download fonts before first paint.
+    if (id === "cdj-critical" || cls.includes("two_critical_css") || cls.includes("two_critical_font")) {
+      css = css.replace(/@font-face\s*\{[^{}]*\}/gi, "");
+    }
     css = minifyCss(css);
     if (!css) return "";
-    // Minify only — keep inline CSS blocking so layout doesn't shift when theme CSS arrives.
+    // Keep inline CSS blocking so layout doesn't shift when deferred theme CSS arrives.
     return `<style${attrs}>${css}</style>`;
   });
   // Pages without Flying Pages critical CSS get the shared homepage critical sheet (prevents CLS).
@@ -759,6 +815,14 @@ function optimizeHtml(html: string, canonicalPath: string) {
 
   next = next.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (full, attrs: string, body: string) => {
     return dropScript(`<script ${attrs}>`, body) ? "" : full;
+  });
+
+  // Inline @font-face blocks (e.g. Purista in page <style>) must declare font-display.
+  next = next.replace(/@font-face\s*\{[^{}]*\}/gi, (block) => {
+    if (/font-display\s*:/i.test(block)) {
+      return block.replace(/font-display:\s*[^;]+/gi, "font-display:optional");
+    }
+    return block.replace(/@font-face\s*\{/i, "@font-face{font-display:optional;");
   });
 
   next = next.replace(/<link\b[^>]*>/gi, (tag) => {
@@ -797,7 +861,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
     deferCss
       ? `<link rel="stylesheet" href="${deferHref}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="${deferHref}"></noscript>`
       : "",
-    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;height:140px;overflow:hidden;background:#111}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block;width:100%;height:140px;object-fit:cover}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}</style>`,
+    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px;position:sticky;top:0;z-index:10000}.brand-header .site-nav-wrap,.site-header .site-nav-wrap{position:relative;z-index:10001}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;aspect-ratio:1920/481;overflow:hidden;background:#111}.sis-slider-wrapper .sis-slide,.slider-wrap .slider-slide{height:100%}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block;width:100%;height:100%;object-fit:cover}.dj-card-image{aspect-ratio:16/9;overflow:hidden;background:#111}.dj-card-image img{width:100%;height:100%;object-fit:cover}.post-body img[width][height]{height:auto}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{aspect-ratio:auto;height:140px}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{height:140px}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}.page-footer,.footer-widgets-wrap,.footer-panels,.footer-bar,#footer,.comment-respond,.dj-media,.dj-instagram,.dj-grid{content-visibility:auto;contain-intrinsic-size:800px}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
@@ -822,20 +886,40 @@ function optimizeHtml(html: string, canonicalPath: string) {
         if (postBodyAt < 0 && /\b(?:post-body|entry-content)\b/i.test(tag)) postBodyAt = offset;
         return tag;
       }
-      const src = readAttr(tag, "src") || "";
+      let src = readAttr(tag, "src") || "";
       if (!src || src.startsWith("data:") || src === "#") return tag;
+      // Flaticon ships 512px icons; social rows display ~32px — request a tiny CDN size.
+      if (/cdn-icons-png\.flaticon\.com\/512\//i.test(src)) {
+        src = src.replace(/\/512\//i, "/64/");
+        tag = setAttr(tag, "src", src);
+      }
+      const pathOnly = src.split("?")[0].split("#")[0];
       const optimized = optimizedImage(src, readAttr(tag, "width"));
       let updated = tag;
       if (optimized) {
         updated = setAttr(removeAttr(removeAttr(updated, "srcset"), "src"), "src", optimized.src);
         updated = setAttr(updated, "srcset", optimized.srcset);
-        if (!readAttr(updated, "sizes")) updated = setAttr(updated, "sizes", "(max-width: 840px) 100vw, 840px");
-        if (!readAttr(updated, "width")) {
-          const size = imageSize(optimized.file);
-          if (size) {
-            updated = setAttr(updated, "width", String(size.w));
-            updated = setAttr(updated, "height", String(size.h));
-          }
+        updated = removeAttr(removeAttr(removeAttr(updated, "data-srcset"), "data-sizes"), "data-src");
+        if (!readAttr(updated, "sizes") || /\d{4}px|100vw\s*,\s*\d{4}/i.test(readAttr(updated, "sizes") || "")) {
+          // Full-bleed slider uses 100vw; large size-full ~content width; other body images stay narrower.
+          const statedW = Number(readAttr(updated, "width") || readAttr(tag, "width") || 0);
+          const sizes = inSlider
+            ? "100vw"
+            : statedW >= 1000 || /size-full/i.test(tag)
+              ? "(max-width: 1200px) 92vw, 1200px"
+              : "(max-width: 840px) 92vw, 540px";
+          updated = setAttr(updated, "sizes", sizes);
+        }
+      }
+      if (!readAttr(updated, "width") || !readAttr(updated, "height")) {
+        const size = imageSize(optimized?.file || pathOnly) || imageSize(pathOnly);
+        if (size) {
+          if (!readAttr(updated, "width")) updated = setAttr(updated, "width", String(size.w));
+          if (!readAttr(updated, "height")) updated = setAttr(updated, "height", String(size.h));
+        } else if (/cdn-icons-png\.flaticon\.com/i.test(pathOnly)) {
+          // Tiny social icons — reserve space without a local size map entry.
+          if (!readAttr(updated, "width")) updated = setAttr(updated, "width", "32");
+          if (!readAttr(updated, "height")) updated = setAttr(updated, "height", "32");
         }
       }
       if (!readAttr(updated, "alt")) updated = setAttr(updated, "alt", "");
@@ -866,22 +950,20 @@ function optimizeHtml(html: string, canonicalPath: string) {
     },
   );
 
-  // Mobile PSI: compact hero slider (~140px) is LCP when the first content image sits deep
-  // in post-body (events). When content image is near the top of post-body (corporate), it wins.
+  // When a large content image sits near the top of post-body (corporate), it wins LCP.
+  // Otherwise prefer the hero slider (home/events) or the first content image.
   const contentDepth = postBodyAt >= 0 && contentAt >= 0 ? contentAt - postBodyAt : 99999;
   const preferContent = !!lcpCands.content && (!lcpCands.slider || contentDepth < 3500);
   const winner = preferContent ? lcpCands.content : lcpCands.slider || lcpCands.content;
-  const secondary = preferContent ? lcpCands.slider : lcpCands.content;
+  const winnerIsSlider = !!winner && winner === lcpCands.slider;
   const winnerSrc = winner?.src || "";
   const winnerKey = winner?.key || "";
-  const secondarySrc = secondary?.src || "";
-  const secondaryKey = secondary?.key || "";
-  // Single small preload URL — imagesrcset can make mobile pick a heavier 1080w candidate.
-  const compactLcpSrc = (src: string) => {
+  // Single preload URL — slider stays ~828w; content LCP needs ~1200w for desktop width.
+  const compactLcpSrc = (src: string, width: string) => {
     try {
       const u = new URL(src, "http://local.invalid");
       if (!u.pathname.includes("/_next/image")) return src;
-      u.searchParams.set("w", "640");
+      u.searchParams.set("w", width);
       u.searchParams.set("q", "65");
       return `${u.pathname}?${u.searchParams.toString()}`;
     } catch {
@@ -890,25 +972,22 @@ function optimizeHtml(html: string, canonicalPath: string) {
   };
   let lcpLinks = "";
   if (winnerSrc && winnerKey) {
-    const compact = compactLcpSrc(winnerSrc);
+    const compact = compactLcpSrc(winnerSrc, winnerIsSlider ? "828" : "1200");
     lcpLinks += `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
     next = next.replace(/<img\b[^>]*>/gi, (tag) => {
       const src = readAttr(tag, "src") || "";
       if (src !== winnerKey && src !== winnerSrc) return tag;
       let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
       updated = setAttr(updated, "src", compact);
-      updated = setAttr(updated, "sizes", "100vw");
+      updated = setAttr(
+        updated,
+        "sizes",
+        winnerIsSlider ? "100vw" : "(max-width: 1200px) 92vw, 1200px",
+      );
       return setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
     });
   }
-  if (secondarySrc && secondaryKey && secondaryKey !== winnerKey) {
-    next = next.replace(/<img\b[^>]*>/gi, (tag) => {
-      const src = readAttr(tag, "src") || "";
-      if (src !== secondaryKey && src !== secondarySrc) return tag;
-      if (/fetchpriority="high"/i.test(tag)) return tag;
-      return setAttr(removeAttr(tag, "loading"), "loading", "eager");
-    });
-  }
+  // Keep only the LCP image eager — a second eager image (logo/content) delays Speed Index.
   if (!winnerSrc) {
     // Absolute fallback: first substantial image in the document.
     let assigned = false;
@@ -922,7 +1001,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
       const chrome = /avatar|emoji|icon|logo|badge|sprite|gravatar|wp-smiley/i.test(`${src} ${tag}`);
       if (tiny || chrome) return tag;
       assigned = true;
-      const compact = compactLcpSrc(src);
+      const compact = compactLcpSrc(src, "828");
       let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
       updated = setAttr(updated, "src", compact);
       updated = setAttr(updated, "sizes", "100vw");
@@ -1098,7 +1177,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
   if (!next.includes('id="cdj-runtime"')) {
     next = next.replace(
       /<\/body>/i,
-      `<style id="cdj-a11y">.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0!important}.slider-wrap .slider-dots{gap:12px!important}.slider-wrap .slider-dot,.slider-wrap .slider-dot.slider-active,.slider-wrap .slider-dot:hover,#page .slider-dots .slider-dot{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;transform:none!important;-webkit-transform:none!important}.dj-ig-crop:has(.cdj-lite--ig),.dj-ig-crop:has(.dj-ig-frame){display:block!important;width:100%!important;max-width:100%!important;margin:0!important;aspect-ratio:16/9!important;overflow:hidden!important;position:relative!important;height:auto!important;border-radius:0!important;box-shadow:none!important}.dj-ig-crop:has(.cdj-lite--ig) .dj-ig-canvas,.dj-ig-crop:has(.dj-ig-frame) .dj-ig-canvas{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;transform:none!important}.dj-ig-crop .cdj-lite--ig,.dj-ig-crop .dj-ig-frame{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;aspect-ratio:16/9!important;max-width:none!important;border:0!important;transform:none!important;background:#111!important;overflow:hidden!important}.dj-ig-crop .cdj-lite--ig img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important}</style>
+      `<style id="cdj-a11y">.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0!important}.slider-wrap .slider-dots{gap:12px!important}.slider-wrap .slider-dot,.slider-wrap .slider-dot.slider-active,.slider-wrap .slider-dot:hover,#page .slider-dots .slider-dot{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;transform:none!important;-webkit-transform:none!important}.dj-media-link{display:inline-flex!important;align-items:center!important;min-height:24px!important;padding:6px 0!important;line-height:1.4!important;position:relative!important;z-index:2!important}.dj-ig-crop:has(.cdj-lite--ig),.dj-ig-crop:has(.dj-ig-frame){display:block!important;width:100%!important;max-width:100%!important;margin:0!important;aspect-ratio:16/9!important;overflow:hidden!important;position:relative!important;height:auto!important;border-radius:0!important;box-shadow:none!important}.dj-ig-crop:has(.cdj-lite--ig) .dj-ig-canvas,.dj-ig-crop:has(.dj-ig-frame) .dj-ig-canvas{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;transform:none!important}.dj-ig-crop .cdj-lite--ig,.dj-ig-crop .dj-ig-frame{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;aspect-ratio:16/9!important;max-width:none!important;border:0!important;transform:none!important;background:#111!important;overflow:hidden!important}.dj-ig-crop .cdj-lite--ig img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important}</style>
 <script id="cdj-runtime">
 const NAV_LINK="nav.site-nav a, nav.utility-nav a";
 const pageCache=new Map();

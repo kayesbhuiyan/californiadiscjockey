@@ -1,6 +1,7 @@
 import { createReadStream, readFileSync } from "fs";
 import { Readable } from "stream";
 import {
+  CSS_BUNDLE_VERSION,
   canonicalPathForFile,
   contentTypeFor,
   isTextAsset,
@@ -15,6 +16,9 @@ import {
 
 export const runtime = "nodejs";
 export const revalidate = 300;
+
+const htmlPageCache = new Map<string, { html: string; at: number }>();
+const HTML_PAGE_CACHE_MS = 5 * 60 * 1000;
 
 type Context = { params: Promise<{ path?: string[] }> };
 
@@ -47,7 +51,23 @@ function textResponse(
   if (options?.blockIndexing && contentType.includes("text/html")) {
     headers["x-robots-tag"] = "noindex, nofollow";
   }
+  // Let the host (Vercel / next start) apply gzip/br — manual gzip double-encodes.
   return new Response(body, { status, headers });
+}
+
+function cachedHtml(
+  cacheKey: string,
+  build: () => string,
+) {
+  const hit = htmlPageCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < HTML_PAGE_CACHE_MS) return hit.html;
+  const html = build();
+  htmlPageCache.set(cacheKey, { html, at: Date.now() });
+  if (htmlPageCache.size > 64) {
+    const oldest = htmlPageCache.keys().next().value;
+    if (oldest) htmlPageCache.delete(oldest);
+  }
+  return html;
 }
 
 function notFound(blockIndexing = false) {
@@ -76,7 +96,6 @@ function notFound(blockIndexing = false) {
 async function serve(request: Request) {
   const url = new URL(request.url);
   const blockIndexing = blockIndexingFor(request);
-
   if (url.pathname === "/_css") {
     const page = url.searchParams.get("p") || "/";
     const kind = url.searchParams.get("k") === "defer" ? "defer" : "block";
@@ -108,15 +127,21 @@ async function serve(request: Request) {
   }
 
   if (resolved.type === "page") {
-    const raw = readFileSync(resolved.file, "utf8");
-    const html = rewriteHtml(raw, resolved.canonicalPath, resolved.forceNoindex, { blockIndexing });
+    const cacheKey = `p:${CSS_BUNDLE_VERSION}:${resolved.canonicalPath}:${resolved.forceNoindex}:${blockIndexing}`;
+    const html = cachedHtml(cacheKey, () => {
+      const raw = readFileSync(resolved.file, "utf8");
+      return rewriteHtml(raw, resolved.canonicalPath, resolved.forceNoindex, { blockIndexing });
+    });
     return textResponse(html, contentTypeFor(resolved.file, html), 200, { blockIndexing });
   }
 
   const assetUrl = canonicalPathForFile(resolved.file);
   if (assetUrl.toLowerCase().endsWith(".html")) {
-    const raw = readFileSync(resolved.file, "utf8");
-    const html = rewriteHtml(raw, assetUrl, true, { blockIndexing });
+    const cacheKey = `a:${CSS_BUNDLE_VERSION}:${assetUrl}:true:${blockIndexing}`;
+    const html = cachedHtml(cacheKey, () => {
+      const raw = readFileSync(resolved.file, "utf8");
+      return rewriteHtml(raw, assetUrl, true, { blockIndexing });
+    });
     return textResponse(html, contentTypeFor(resolved.file, html), 200, { blockIndexing });
   }
 
