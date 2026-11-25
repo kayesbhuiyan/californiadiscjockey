@@ -6,7 +6,7 @@ import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "54";
+export const CSS_BUNDLE_VERSION = "55";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -355,7 +355,14 @@ function rewriteUrl(raw: string, pageUrl: URL) {
     /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(mirroredHost) &&
     /\.[a-z]{2,}$/i.test(mirroredHost)
   ) {
-    return `https://${segments.join("/")}${absolute.search}${absolute.hash}`;
+    const mirrorHostNorm = mirroredHost.replace(/^www\./i, "").toLowerCase();
+    // HTTrack often nests same-site assets as ../../www.californiadiscjockey.com/wp-content/...
+    // Keep those on this site instead of emitting a dead absolute www URL.
+    if (mirrorHostNorm === "californiadiscjockey.com") {
+      pathname = "/" + segments.slice(1).join("/");
+    } else {
+      return `https://${segments.join("/")}${absolute.search}${absolute.hash}`;
+    }
   }
 
   if (pathname.endsWith("/index.html")) {
