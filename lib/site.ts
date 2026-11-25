@@ -5,7 +5,7 @@ import { scrubCss, scrubHtmlFootprints } from "@/lib/scrub";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "39";
+export const CSS_BUNDLE_VERSION = "40";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -486,20 +486,32 @@ const IMAGE_WIDTHS = [640, 750, 828, 1080, 1200, 1920];
 const cssBundleCache = new Map<string, string>();
 const imageSizeCache = new Map<string, { w: number; h: number } | null>();
 
+function resolveLocalAsset(file: string) {
+  // On Windows, path.isAbsolute("/media/x") is true and becomes "F:\\media\\x".
+  // Keep site asset URLs rooted under public/ (or an explicit Windows/UNC path).
+  if (/^[A-Za-z]:[\\/]/.test(file) || file.startsWith("\\\\")) return file;
+  if (file.startsWith("/media/") || file.startsWith("/assets/")) {
+    return publicFile(file) || path.join(PUBLIC_ROOT, file.replace(/^\//, ""));
+  }
+  if (process.platform !== "win32" && path.isAbsolute(file)) return file;
+  return file;
+}
+
 function imageSize(file: string) {
   if (imageSizeCache.has(file)) return imageSizeCache.get(file) ?? null;
   let size: { w: number; h: number } | null = null;
-  const resolved =
-    path.isAbsolute(file) || /^[A-Za-z]:[\\/]/.test(file)
-      ? file
-      : file.startsWith("/media/") || file.startsWith("/assets/")
-        ? publicFile(file) || path.join(PUBLIC_ROOT, file.replace(/^\//, ""))
-        : file;
-  if (!resolved || !fs.existsSync(resolved)) {
+  const resolved = resolveLocalAsset(file);
+  if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     imageSizeCache.set(file, null);
     return null;
   }
-  const fd = fs.openSync(resolved, "r");
+  let fd: number;
+  try {
+    fd = fs.openSync(resolved, "r");
+  } catch {
+    imageSizeCache.set(file, null);
+    return null;
+  }
   try {
     const data = Buffer.alloc(524288);
     const bytes = fs.readSync(fd, data, 0, data.length, 0);
@@ -696,8 +708,9 @@ function videoPoster(src: string) {
   if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
   const instagram = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i);
   if (instagram) {
-    const local = `/media/instagram/${instagram[1]}.jpg`;
-    if (lookupFile(local) || publicFile(local)) return local;
+    // Always use the CDN path. On Vercel, public/media is static-only and is not
+    // present in the serverless filesystem, so lookupFile/publicFile would miss it.
+    return `/media/instagram/${instagram[1]}.jpg`;
   }
   return "";
 }
@@ -1029,7 +1042,9 @@ function optimizeHtml(html: string, canonicalPath: string) {
     if (isInstagram) {
       const igId = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || "";
       const localMp4 = igId ? `/media/instagram/${igId}.mp4` : "";
-      if (localMp4 && (lookupFile(localMp4) || publicFile(localMp4))) {
+      // Prefer CDN MP4 for in-page play. Do not require a serverless fs hit —
+      // public/media is excluded from the function bundle on Vercel.
+      if (localMp4) {
         playable = localMp4;
         mediaKind = "video";
       } else {
@@ -1051,21 +1066,25 @@ function optimizeHtml(html: string, canonicalPath: string) {
     const ratio = "16/9";
     const poster = videoPoster(src);
     const youtubeId = poster.includes("i.ytimg.com/vi/") ? poster.match(/\/vi\/([^/]+)\//)?.[1] : "";
-    const optimized = poster.startsWith("/media/") ? optimizedImage(poster, "840") : null;
-    const imageSrc = optimized?.src || poster;
-    const image = poster
+    // Prefer direct CDN poster for Instagram — avoids Next image optimizer needing
+    // the file inside the serverless bundle (public/media is CDN-only on Vercel).
+    const useDirectPoster = isInstagram && poster.startsWith("/media/");
+    const optimized = !useDirectPoster && poster.startsWith("/media/") ? optimizedImage(poster, "840") : null;
+    const imageSrc = useDirectPoster ? poster : optimized?.src || poster;
+    const hasPosterImg = Boolean(poster);
+    const image = hasPosterImg
       ? `<img src="${imageSrc}" alt="" width="480" height="360" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer"${
           optimized?.srcset ? ` srcset="${optimized.srcset}" sizes="(max-width: 840px) 100vw, 840px"` : ""
         }${
           youtubeId
             ? ` onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg'"`
-            : ` onerror="this.remove()"`
+            : ` onerror="this.onerror=null;this.src='${poster.replace(/'/g, "")}'"`
         }>`
       : isInstagram
         ? `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`
         : "";
     const igClass = isInstagram ? " cdj-lite--ig" : "";
-    const posterClass = image && isInstagram ? " cdj-lite--poster" : "";
+    const posterClass = hasPosterImg && isInstagram ? " cdj-lite--poster" : "";
     // Inline onclick is the reliable one-tap path; delegated listeners are a backup.
     return `<button type="button" class="cdj-lite${igClass}${posterClass}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-kind="${mediaKind}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}" onclick="return window.cdjPlay&&window.cdjPlay(this)">${image}<span class="cdj-play"></span></button>`;
   });
