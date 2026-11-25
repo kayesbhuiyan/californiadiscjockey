@@ -5,9 +5,12 @@ import { scrubCss, scrubHtmlFootprints } from "@/lib/scrub";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "4";
+export const CSS_BUNDLE_VERSION = "39";
+let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
+/** Static CDN files (images/videos). Kept out of the serverless function bundle. */
+const PUBLIC_ROOT = path.join(process.cwd(), "public");
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -59,9 +62,34 @@ export type Resolved =
 let catalog: Catalog | null = null;
 
 function isInsideRoot(file: string) {
-  const root = path.resolve(SITE_ROOT);
   const resolved = path.resolve(file);
-  return resolved === root || resolved.startsWith(root + path.sep);
+  const site = path.resolve(SITE_ROOT);
+  const pub = path.resolve(PUBLIC_ROOT);
+  return (
+    resolved === site ||
+    resolved.startsWith(site + path.sep) ||
+    resolved === pub ||
+    resolved.startsWith(pub + path.sep)
+  );
+}
+
+function publicFile(pathname: string) {
+  const clean = pathname.split("?")[0].split("#")[0];
+  if (!clean.startsWith("/media/") && !clean.startsWith("/assets/")) return null;
+  const candidates = [clean];
+  // WordPress sized derivatives often aren't mirrored; fall back to the full image.
+  const sized = clean.match(/^(.*)-\d+x\d+(\.[A-Za-z0-9]+)$/);
+  if (sized) candidates.push(`${sized[1]}${sized[2]}`);
+  if (/\.jpeg$/i.test(clean)) candidates.push(clean.replace(/\.jpeg$/i, ".jpg"));
+  if (/\.jpg$/i.test(clean)) candidates.push(clean.replace(/\.jpg$/i, ".jpeg"));
+  if (/\.webp$/i.test(clean)) {
+    candidates.push(clean.replace(/\.webp$/i, ".jpg"), clean.replace(/\.webp$/i, ".png"));
+  }
+  for (const candidate of candidates) {
+    const file = path.join(PUBLIC_ROOT, candidate.replace(/^\//, ""));
+    if (isInsideRoot(file) && fs.existsSync(file) && fs.statSync(file).isFile()) return file;
+  }
+  return null;
 }
 
 function httrackAlias(filename: string) {
@@ -100,11 +128,19 @@ function buildCatalog(): Catalog {
       if (entry.name === "index.html") {
         const canonicalPath = urlPath.slice(0, -"index.html".length);
         const head = fs.readFileSync(full, "utf8").slice(0, 20000);
+        const segments = canonicalPath.split("/").filter(Boolean);
+        const junkPath =
+          segments.includes("embed") ||
+          segments.includes("chrome-extension_") ||
+          segments.some((s) => s.startsWith("$")) ||
+          /\/(test|test-2|testimonil-page|bar-demon|bay-area-dj-old)\/$/i.test(canonicalPath);
         const forceNoindex =
+          junkPath ||
           /<title>\s*Page not found/i.test(head) ||
+          /<title>\s*Index of\s/i.test(head) ||
+          /Page has moved/i.test(head) ||
           canonicalPath.startsWith("/wp-admin/") ||
           canonicalPath.startsWith("/wp-login");
-        const segments = canonicalPath.split("/").filter(Boolean);
         const inSitemap =
           !forceNoindex &&
           !segments.includes("feed") &&
@@ -159,6 +195,16 @@ function lookupFile(pathname: string) {
     if (files.has(key)) return files.get(key) ?? null;
     if (key.endsWith(".jpeg") && files.has(key.slice(0, -5) + ".jpg")) return files.get(key.slice(0, -5) + ".jpg") ?? null;
     if (key.endsWith(".jpg") && files.has(key.slice(0, -4) + ".jpeg")) return files.get(key.slice(0, -4) + ".jpeg") ?? null;
+    const fromPublic = publicFile(candidate);
+    if (fromPublic) return fromPublic;
+    if (candidate.toLowerCase().endsWith(".jpeg")) {
+      const jpg = publicFile(candidate.slice(0, -5) + ".jpg");
+      if (jpg) return jpg;
+    }
+    if (candidate.toLowerCase().endsWith(".jpg")) {
+      const jpeg = publicFile(candidate.slice(0, -4) + ".jpeg");
+      if (jpeg) return jpeg;
+    }
   }
   return null;
 }
@@ -175,13 +221,27 @@ export function resolveRequest(pathname: string): Resolved | null {
   if (decoded === "/sitemap.xml") return { type: "sitemap" };
   if (decoded === "/robots.txt") return { type: "robots" };
   if (decoded === "/favicon.ico") {
-    const icon = lookupFile("/media/2022/09/918371-1.jpg");
-    return icon ? { type: "asset", file: icon } : null;
+    // Prefer static public file (CDN) over streaming through the Node function.
+    if (publicFile("/media/2022/09/918371-1.jpg")) {
+      return { type: "redirect", to: "/media/2022/09/918371-1.jpg" };
+    }
   }
 
   if (decoded.endsWith("/index.html")) {
     const target = decoded.slice(0, -"index.html".length) || "/";
     return { type: "redirect", to: target };
+  }
+
+  // HTTrack leaves both /events.html and /events/index.html; prefer the pretty page (with CSS).
+  if (/\.html$/i.test(decoded) && !decoded.toLowerCase().endsWith("/index.html")) {
+    const pretty = decoded.replace(/\.html$/i, "/");
+    if (lookupPage(pretty)) return { type: "redirect", to: pretty };
+  }
+
+  // Duplicate HTTrack copies like /bay-area/foo/index-2.html → /bay-area/foo/
+  if (/\/index-\d+\.html$/i.test(decoded)) {
+    const pretty = decoded.replace(/\/index-\d+\.html$/i, "/");
+    if (lookupPage(pretty)) return { type: "redirect", to: pretty };
   }
 
   const rewrittenPath = rewritePublicPath(decoded);
@@ -298,6 +358,12 @@ function rewriteUrl(raw: string, pageUrl: URL) {
 
   if (pathname.endsWith("/index.html")) {
     pathname = pathname.slice(0, -"index.html".length) || "/";
+  } else if (/\/index-\d+\.html$/i.test(pathname)) {
+    const pretty = pathname.replace(/\/index-\d+\.html$/i, "/");
+    if (lookupPage(pretty)) pathname = pretty;
+  } else if (/\.html$/i.test(pathname) && !pathname.toLowerCase().endsWith("/index.html")) {
+    const pretty = pathname.replace(/\.html$/i, "/");
+    if (lookupPage(pretty)) pathname = pretty;
   } else if (!isStaticPath(pathname) && !path.posix.extname(pathname) && !pathname.endsWith("/")) {
     pathname += "/";
   }
@@ -423,7 +489,17 @@ const imageSizeCache = new Map<string, { w: number; h: number } | null>();
 function imageSize(file: string) {
   if (imageSizeCache.has(file)) return imageSizeCache.get(file) ?? null;
   let size: { w: number; h: number } | null = null;
-  const fd = fs.openSync(file, "r");
+  const resolved =
+    path.isAbsolute(file) || /^[A-Za-z]:[\\/]/.test(file)
+      ? file
+      : file.startsWith("/media/") || file.startsWith("/assets/")
+        ? publicFile(file) || path.join(PUBLIC_ROOT, file.replace(/^\//, ""))
+        : file;
+  if (!resolved || !fs.existsSync(resolved)) {
+    imageSizeCache.set(file, null);
+    return null;
+  }
+  const fd = fs.openSync(resolved, "r");
   try {
     const data = Buffer.alloc(524288);
     const bytes = fs.readSync(fd, data, 0, data.length, 0);
@@ -466,9 +542,26 @@ function removeAttr(tag: string, name: string) {
   return tag.replace(new RegExp(`\\s${name}\\s*=\\s*(["'])[\\s\\S]*?\\1`, "gi"), "");
 }
 
+/** Map same-origin absolute CSS/asset URLs to a site path; drop true externals. */
+function localHrefPath(href: string) {
+  const trimmed = href.trim();
+  if (!trimmed || /^(data:|#)/i.test(trimmed)) return null;
+  if (/^(https?:)?\/\//i.test(trimmed) || /^https?:/i.test(trimmed)) {
+    try {
+      const absolute = new URL(trimmed, SITE_ORIGIN);
+      const host = absolute.hostname.replace(/^www\./i, "").toLowerCase();
+      if (host !== "californiadiscjockey.com") return null;
+      return absolute.pathname;
+    } catch {
+      return null;
+    }
+  }
+  return trimmed.split("?")[0].split("#")[0] || null;
+}
+
 function resolveLegacyAssetPath(href: string, pageFile: string) {
-  const clean = href.split("?")[0].split("#")[0];
-  if (!clean || /^(data:|https?:|\/\/)/i.test(clean)) return null;
+  const clean = localHrefPath(href);
+  if (!clean) return null;
   let pathname = clean;
   if (!pathname.startsWith("/")) {
     const resolved = path.resolve(path.dirname(pageFile), pathname);
@@ -478,20 +571,47 @@ function resolveLegacyAssetPath(href: string, pageFile: string) {
   return lookupFile(pathname);
 }
 
+function shouldDeferStylesheet(_publicHref: string, _tag: string, media: string) {
+  if (media === "print") return true;
+  // Homepage strategy for every page: critical CSS + deferred sheets.
+  // Extra layout reserves in #cdj-speed keep CLS near zero without render-blocking CSS.
+  return true;
+}
+
+function homeCriticalCss() {
+  if (homeCriticalCssCache !== undefined) return homeCriticalCssCache;
+  const home = lookupPage("/");
+  if (!home) {
+    homeCriticalCssCache = null;
+    return null;
+  }
+  const raw = fs.readFileSync(home.file, "utf8");
+  const match = raw.match(/<style\b[^>]*class=(["'])two_critical_css\1[^>]*>([\s\S]*?)<\/style>/i);
+  homeCriticalCssCache = match ? minifyCss(match[2]) : null;
+  return homeCriticalCssCache;
+}
+
+function minifyCss(css: string) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([{};:,])\s*/g, "$1")
+    .replace(/;}/g, "}")
+    .trim();
+}
+
 function localStylesheets(raw: string, pageFile: string) {
   const sheets: { href: string; file: string; defer: boolean }[] = [];
   for (const tag of raw.match(/<link\b[^>]*>/gi) ?? []) {
     const rel = (readAttr(tag, "rel") || "").toLowerCase().split(/\s+/);
     if (!rel.includes("stylesheet")) continue;
     const href = readAttr(tag, "href");
-    if (!href || /^(data:|https?:|\/\/)/i.test(href)) continue;
+    if (!href) continue;
     const file = resolveLegacyAssetPath(href, pageFile);
     if (!file || !isInsideRoot(file) || !fs.existsSync(file)) continue;
     const publicHref = canonicalPathForFile(file);
     const media = (readAttr(tag, "media") || "all").toLowerCase();
-    const defer =
-      media === "print" ||
-      /font|roboto|tw_optimize|\/assets\/critical\/|uncritical/i.test(`${publicHref} ${tag}`);
+    const defer = shouldDeferStylesheet(publicHref, tag, media);
     sheets.push({ href: publicHref, file, defer });
   }
   return sheets;
@@ -538,7 +658,7 @@ export function renderPageCss(pagePath: string, kind: "block" | "defer") {
     })
     .replace(/src:\s*none(?:\s+format\([^)]*\))?\s*,?/gi, "")
     .replace(/@font-face\s*\{[^{}]*\}/gi, (block) => (/src\s*:/i.test(block) ? block : ""));
-  const cleaned = scrubCss(css);
+  const cleaned = minifyCss(scrubCss(css));
   cssBundleCache.set(key, cleaned);
   return cleaned;
 }
@@ -549,10 +669,19 @@ function optimizedImage(src: string, widthAttr: string | undefined) {
   if (/\.(svg|gif|ico)$/i.test(pathOnly)) return null;
   const file = lookupFile(pathOnly);
   if (!file) return null;
+  // Prefer the resolved on-disk public path (handles jpg/jpeg + WP -WxH fallbacks).
+  const publicUrl = (() => {
+    const abs = path.resolve(file);
+    const pub = path.resolve(PUBLIC_ROOT);
+    if (abs === pub || abs.startsWith(pub + path.sep)) {
+      return "/" + path.relative(pub, abs).split(path.sep).join("/");
+    }
+    return pathOnly;
+  })();
   const stated = Number(widthAttr);
   const widths = IMAGE_WIDTHS.filter((width) => !stated || stated >= 400 || width <= stated * 2 + 40);
   const chosen = widths.length ? widths : [640];
-  const urlFor = (width: number) => `/_next/image?url=${encodeURIComponent(pathOnly)}&w=${width}&q=75`;
+  const urlFor = (width: number) => `/_next/image?url=${encodeURIComponent(publicUrl)}&w=${width}&q=75`;
   return {
     file,
     src: urlFor(chosen[Math.min(chosen.length - 1, 2)] ?? chosen[0]),
@@ -568,7 +697,7 @@ function videoPoster(src: string) {
   const instagram = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i);
   if (instagram) {
     const local = `/media/instagram/${instagram[1]}.jpg`;
-    if (lookupFile(local)) return local;
+    if (lookupFile(local) || publicFile(local)) return local;
   }
   return "";
 }
@@ -592,12 +721,29 @@ function dropScript(tag: string, body: string) {
 
 function optimizeHtml(html: string, canonicalPath: string) {
   let next = html.replace(/<style\b[^>]*id=(["'])global-styles-inline-css\1[^>]*>[\s\S]*?<\/style>/gi, "");
-  next = next.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, (block) =>
-    block
+  // Noscript image duplicates steal LCP priority and bandwidth; real lazy imgs already exist.
+  next = next.replace(/<noscript>\s*<img\b[\s\S]*?<\/noscript>/gi, "");
+  next = next.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_full, attrs: string, body: string) => {
+    let css = body
       .replace(/#20a0cf/gi, "#2278b0")
       .replace(/#ff6600/gi, "#e85d00")
-      .replace(/(\.banner\s+a\[href\^=["']tel:["']\]\s*\{\s*color\s*:\s*)#ff0000/gi, "$1#c00000"),
-  );
+      .replace(/(\.banner\s+a\[href\^=["']tel:["']\]\s*\{\s*color\s*:\s*)#ff0000/gi, "$1#c00000");
+    css = minifyCss(css);
+    if (!css) return "";
+    // Minify only — keep inline CSS blocking so layout doesn't shift when theme CSS arrives.
+    return `<style${attrs}>${css}</style>`;
+  });
+  // Pages without Flying Pages critical CSS get the shared homepage critical sheet (prevents CLS).
+  if (!/\btwo_critical_css\b/i.test(next)) {
+    const critical = homeCriticalCss();
+    if (critical) {
+      next = next.replace(
+        /<head[^>]*>/i,
+        (head) => `${head}<style class="two_critical_css" id="cdj-critical">${critical}</style>`,
+      );
+    }
+  }
+
   next = next.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (full, attrs: string, body: string) => {
     return dropScript(`<script ${attrs}>`, body) ? "" : full;
   });
@@ -605,9 +751,16 @@ function optimizeHtml(html: string, canonicalPath: string) {
   next = next.replace(/<link\b[^>]*>/gi, (tag) => {
     const rel = (readAttr(tag, "rel") || "").toLowerCase();
     const href = readAttr(tag, "href") || "";
+    const localPath = localHrefPath(href) || "";
+    const rewrittenLocal = localPath ? rewritePublicPath(localPath) : "";
     if (
       rel.split(/\s+/).includes("stylesheet") &&
-      (href.startsWith("/wp-content/") || href.startsWith("/assets/") || href.startsWith("/media/"))
+      (rewrittenLocal.startsWith("/wp-content/") ||
+        rewrittenLocal.startsWith("/assets/") ||
+        rewrittenLocal.startsWith("/media/") ||
+        localPath.startsWith("/wp-content/") ||
+        localPath.startsWith("/assets/") ||
+        localPath.startsWith("/media/"))
     ) {
       return "";
     }
@@ -626,56 +779,142 @@ function optimizeHtml(html: string, canonicalPath: string) {
         `${head}<link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=block&v=${CSS_BUNDLE_VERSION}">`,
     );
   }
+  const deferHref = `/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}`;
   const bundleLinks = [
     deferCss
-      ? `<link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}"></noscript>`
+      ? `<link rel="stylesheet" href="${deferHref}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="${deferHref}"></noscript>`
       : "",
-    `<style id="cdj-speed">.elementor-invisible{visibility:visible!important}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}.dj-container .dj-button{background:#e8c96a !important;color:#1a1a1a !important}.dj-container .dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}</style>`,
+    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;height:140px;overflow:hidden;background:#111}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block;width:100%;height:140px;object-fit:cover}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
-  let lcp = "";
-  let imageIndex = 0;
-  next = next.replace(/<img\b[^>]*>/gi, (tag) => {
-    const src = readAttr(tag, "src") || "";
-    if (!src || src.startsWith("data:") || src === "#") return tag;
-    const optimized = optimizedImage(src, readAttr(tag, "width"));
-    let updated = tag;
-    if (optimized) {
-      updated = setAttr(removeAttr(removeAttr(updated, "srcset"), "src"), "src", optimized.src);
-      updated = setAttr(updated, "srcset", optimized.srcset);
-      if (!readAttr(updated, "sizes")) updated = setAttr(updated, "sizes", "(max-width: 840px) 100vw, 840px");
-      if (!readAttr(updated, "width")) {
-        const size = imageSize(optimized.file);
-        if (size) {
-          updated = setAttr(updated, "width", String(size.w));
-          updated = setAttr(updated, "height", String(size.h));
+  type LcpCand = { src: string; srcset: string; sizes: string; key: string };
+  let sliderCand: LcpCand | null = null;
+  let contentCand: LcpCand | null = null;
+  let inSlider = false;
+  let inMainContent = false;
+  let postBodyAt = -1;
+  let contentAt = -1;
+  // Match pre-scrub class names — scrubHtmlFootprints runs after this pass.
+  next = next.replace(
+    /<article\b[^>]*>|<main\b[^>]*>|<div\b[^>]*\b(?:post-body|entry-content|sis-slider-wrapper|slider-wrap)\b[^>]*>|<img\b[^>]*>/gi,
+    (tag, offset: number) => {
+      if (/\b(?:sis-slider-wrapper|slider-wrap)\b/i.test(tag)) {
+        inSlider = true;
+        return tag;
+      }
+      if (/^<(?:article|main)\b/i.test(tag) || /\b(?:post-body|entry-content)\b/i.test(tag)) {
+        inMainContent = true;
+        inSlider = false;
+        if (postBodyAt < 0 && /\b(?:post-body|entry-content)\b/i.test(tag)) postBodyAt = offset;
+        return tag;
+      }
+      const src = readAttr(tag, "src") || "";
+      if (!src || src.startsWith("data:") || src === "#") return tag;
+      const optimized = optimizedImage(src, readAttr(tag, "width"));
+      let updated = tag;
+      if (optimized) {
+        updated = setAttr(removeAttr(removeAttr(updated, "srcset"), "src"), "src", optimized.src);
+        updated = setAttr(updated, "srcset", optimized.srcset);
+        if (!readAttr(updated, "sizes")) updated = setAttr(updated, "sizes", "(max-width: 840px) 100vw, 840px");
+        if (!readAttr(updated, "width")) {
+          const size = imageSize(optimized.file);
+          if (size) {
+            updated = setAttr(updated, "width", String(size.w));
+            updated = setAttr(updated, "height", String(size.h));
+          }
         }
       }
-    }
-    if (!readAttr(updated, "alt")) updated = setAttr(updated, "alt", "");
-    const currentSrc = readAttr(updated, "src") || "";
-    if (!currentSrc) {
-      const fromSet = (readAttr(updated, "srcset") || "").split(",")[0]?.trim().split(/\s+/)[0];
-      if (fromSet) updated = setAttr(updated, "src", fromSet);
-    }
-    imageIndex += 1;
-    updated = setAttr(updated, "decoding", "async");
-    if (imageIndex === 1) {
-      updated = removeAttr(removeAttr(updated, "loading"), "fetchpriority");
-      updated = setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
-      const preloadSrc = readAttr(updated, "src") || src;
-      const preloadSet = readAttr(updated, "srcset");
-      const preloadSizes = readAttr(updated, "sizes");
-      lcp = `<link rel="preload" as="image" href="${preloadSrc}"${preloadSet ? ` imagesrcset="${preloadSet}"` : ""}${preloadSizes ? ` imagesizes="${preloadSizes}"` : ""} fetchpriority="high">`;
-    } else {
+      if (!readAttr(updated, "alt")) updated = setAttr(updated, "alt", "");
+      const currentSrc = readAttr(updated, "src") || "";
+      if (!currentSrc) {
+        const fromSet = (readAttr(updated, "srcset") || "").split(",")[0]?.trim().split(/\s+/)[0];
+        if (fromSet) updated = setAttr(updated, "src", fromSet);
+      }
+      updated = setAttr(updated, "decoding", "async");
+      const width = Number(readAttr(updated, "width") || 0);
+      const height = Number(readAttr(updated, "height") || 0);
+      const tiny = (width > 0 && width < 120) || (height > 0 && height < 120);
+      const chrome = /avatar|emoji|icon|logo|badge|sprite|gravatar|wp-smiley/i.test(`${src} ${updated}`);
+      const cand: LcpCand = {
+        src: readAttr(updated, "src") || src,
+        srcset: readAttr(updated, "srcset") || "",
+        sizes: readAttr(updated, "sizes") || "",
+        key: readAttr(updated, "src") || src,
+      };
+      if (!tiny && !chrome && inSlider && !sliderCand) sliderCand = cand;
+      if (!tiny && !chrome && inMainContent && !contentCand) {
+        contentCand = cand;
+        contentAt = offset;
+      }
       updated = removeAttr(updated, "fetchpriority");
-      if (!readAttr(updated, "loading")) updated = setAttr(updated, "loading", "lazy");
-      else updated = setAttr(updated, "loading", "lazy");
+      updated = setAttr(updated, "loading", "lazy");
+      return updated;
+    },
+  );
+
+  // Mobile PSI: compact hero slider (~140px) is LCP when the first content image sits deep
+  // in post-body (events). When content image is near the top of post-body (corporate), it wins.
+  const contentDepth = postBodyAt >= 0 && contentAt >= 0 ? contentAt - postBodyAt : 99999;
+  const preferContent = !!contentCand && (!sliderCand || contentDepth < 3500);
+  const winner = preferContent ? contentCand : sliderCand || contentCand;
+  const secondary = preferContent ? sliderCand : contentCand;
+  // Single small preload URL — imagesrcset can make mobile pick a heavier 1080w candidate.
+  const compactLcpSrc = (src: string) => {
+    try {
+      const u = new URL(src, "http://local.invalid");
+      if (!u.pathname.includes("/_next/image")) return src;
+      u.searchParams.set("w", "640");
+      u.searchParams.set("q", "65");
+      return `${u.pathname}?${u.searchParams.toString()}`;
+    } catch {
+      return src;
     }
-    return updated;
-  });
-  if (lcp) next = next.replace(/<\/head>/i, `${lcp}</head>`);
+  };
+  let lcpLinks = "";
+  if (winner) {
+    const compact = compactLcpSrc(winner.src);
+    lcpLinks += `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
+    next = next.replace(/<img\b[^>]*>/gi, (tag) => {
+      const src = readAttr(tag, "src") || "";
+      if (src !== winner!.key && src !== winner!.src) return tag;
+      let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
+      updated = setAttr(updated, "src", compact);
+      updated = setAttr(updated, "sizes", "100vw");
+      return setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
+    });
+  }
+  if (secondary && secondary.key !== winner?.key) {
+    next = next.replace(/<img\b[^>]*>/gi, (tag) => {
+      const src = readAttr(tag, "src") || "";
+      if (src !== secondary!.key && src !== secondary!.src) return tag;
+      if (/fetchpriority="high"/i.test(tag)) return tag;
+      return setAttr(removeAttr(tag, "loading"), "loading", "eager");
+    });
+  }
+  if (!winner) {
+    // Absolute fallback: first substantial image in the document.
+    let assigned = false;
+    next = next.replace(/<img\b[^>]*>/gi, (tag) => {
+      if (assigned) return tag;
+      const src = readAttr(tag, "src") || "";
+      if (!src || src.startsWith("data:") || src === "#") return tag;
+      const width = Number(readAttr(tag, "width") || 0);
+      const height = Number(readAttr(tag, "height") || 0);
+      const tiny = (width > 0 && width < 120) || (height > 0 && height < 120);
+      const chrome = /avatar|emoji|icon|logo|badge|sprite|gravatar|wp-smiley/i.test(`${src} ${tag}`);
+      if (tiny || chrome) return tag;
+      assigned = true;
+      const compact = compactLcpSrc(src);
+      let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
+      updated = setAttr(updated, "src", compact);
+      updated = setAttr(updated, "sizes", "100vw");
+      updated = setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
+      lcpLinks = `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
+      return updated;
+    });
+  }
+  if (lcpLinks) next = next.replace(/<\/head>/i, `${lcpLinks}</head>`);
 
   next = next.replace(/<video\b[^>]*>/gi, (tag) => {
     let updated = setAttr(tag, "preload", "none");
@@ -695,18 +934,116 @@ function optimizeHtml(html: string, canonicalPath: string) {
     return `<a ${attrs}>${before}${label}${after}</a>`;
   });
 
-  next = next.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, (tag) => {
-    const src = readAttr(tag, "src") || readAttr(tag, "data-src") || "";
-    if (!/youtube\.com|youtu\.be|youtube-nocookie\.com|instagram\.com|vimeo\.com/i.test(src)) {
-      return /loading=/i.test(tag) ? tag : setAttr(tag, "loading", "lazy");
+  // Sidebar widget titles often start at h3 (heading-order audit). Keep text/classes; use <p>.
+  next = next.replace(
+    /<(h[3-6])(\s[^>]*\bpanel-title\b[^>]*)>([\s\S]*?)<\/\1>/gi,
+    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
+  );
+
+  // Fix bare email anchors (no href) and image-only links missing accessible names — keep visible content.
+  next = next.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (full, attrs: string, inner: string) => {
+    let tag = `<a ${attrs}>`;
+    const href = readAttr(tag, "href");
+    const text = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const email = text.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/i);
+    if ((!href || href === "#" || /^javascript:/i.test(href)) && email) {
+      tag = setAttr(tag, "href", `mailto:${email[0]}`);
+      return `${tag}${inner}</a>`;
     }
-    const title = (readAttr(tag, "title") || "video").replace(/"/g, "&quot;");
+    if (!href) {
+      const className = readAttr(tag, "class");
+      return `<span${className ? ` class="${className}"` : ""}>${inner}</span>`;
+    }
+    const aria = readAttr(tag, "aria-label");
+    const title = readAttr(tag, "title");
+    if (!text && !aria && !title) {
+      const imgAlt = (inner.match(/<img\b[^>]*\salt=(["'])([\s\S]*?)\1/i) || [])[2]?.trim();
+      const imgSrc = (inner.match(/<img\b[^>]*\ssrc=(["'])([\s\S]*?)\1/i) || [])[2] || "";
+      const fromFile = imgSrc
+        .split("/")
+        .pop()
+        ?.split("?")[0]
+        ?.replace(/\.[a-z0-9]+$/i, "")
+        .replace(/[-_]+/g, " ")
+        .trim();
+      const label = (imgAlt || fromFile || "View image").replace(/"/g, "&quot;");
+      tag = setAttr(tag, "aria-label", label);
+      return `${tag}${inner}</a>`;
+    }
+    return full;
+  });
+
+  // Drop noscript iframe fallbacks (including HTTrack/Flying Pages unclosed iframes).
+  next = next.replace(/<noscript>\s*<iframe\b[\s\S]*?(?:<\/iframe>\s*)?<\/noscript>/gi, "");
+  // Opening-tag-only: setAttr appends before the final ">", which breaks if the match includes </iframe>.
+  next = next.replace(/<iframe\b[^>]*>/gi, (openTag) => {
+    const rawSrc = readAttr(openTag, "src") || "";
+    const dataSrc = readAttr(openTag, "data-src") || "";
+    // Flying Pages / lazy embeds use src="#" with the real URL in data-src.
+    const src =
+      dataSrc && (!rawSrc || rawSrc === "#" || /^about:blank$/i.test(rawSrc) || rawSrc.startsWith("data:"))
+        ? dataSrc
+        : rawSrc || dataSrc;
+    if (!/youtube\.com|youtu\.be|youtube-nocookie\.com|instagram\.com|vimeo\.com/i.test(src)) {
+      // Contact form and other third-party frames: keep URL, defer load via lite facade in the full-tag pass.
+      return openTag;
+    }
+    // Video embeds: rewrite the whole iframe element (open + close) in a second pass below.
+    return openTag;
+  });
+  next = next.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, (tag) => {
+    const open = tag.match(/^<iframe\b[^>]*>/i)?.[0] || tag;
+    const rawSrc = readAttr(open, "src") || "";
+    const dataSrc = readAttr(open, "data-src") || "";
+    const src =
+      dataSrc && (!rawSrc || rawSrc === "#" || /^about:blank$/i.test(rawSrc) || rawSrc.startsWith("data:"))
+        ? dataSrc
+        : rawSrc || dataSrc;
+    if (!/youtube\.com|youtu\.be|youtube-nocookie\.com|instagram\.com|vimeo\.com/i.test(src)) {
+      // Keep third-party embeds (e.g. contact form) intact — only add a11y + lazy loading.
+      let updated = open;
+      if (!readAttr(updated, "title") && !readAttr(updated, "aria-label")) {
+        const label = /contact/i.test(src) ? "Contact form" : "Embedded content";
+        updated = setAttr(updated, "title", label);
+      }
+      if (!/loading=/i.test(updated)) updated = setAttr(updated, "loading", "lazy");
+      return tag.replace(/^<iframe\b[^>]*>/i, updated);
+    }
+    const title = (readAttr(open, "title") || "video").replace(/"/g, "&quot;");
     const isInstagram = /instagram\.com/i.test(src);
-    const playable = isInstagram
-      ? src.replace(/([?&])autoplay=1(&)?/g, (_, sep: string, trail?: string) => (trail ? sep : "")).replace(/\?$/, "")
-      : src.includes("autoplay=")
-        ? src
-        : `${src}${src.includes("?") ? "&" : "?"}autoplay=1`;
+    // Keep autoplay in the deferred iframe src so the activating click counts as the user gesture.
+    const withParam = (url: string, key: string, value: string) => {
+      if (new RegExp(`[?&]${key}=`, "i").test(url)) {
+        return url.replace(new RegExp(`([?&])${key}=[^&]*`, "i"), `$1${key}=${value}`);
+      }
+      return `${url}${url.includes("?") ? "&" : "?"}${key}=${value}`;
+    };
+    let playable = src;
+    let mediaKind = "iframe";
+    // Instagram's own embed "play" control is a link off-site. Prefer a local MP4
+    // (public/media/instagram/{id}.mp4) so one click plays on this page like YouTube.
+    if (isInstagram) {
+      const igId = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || "";
+      const localMp4 = igId ? `/media/instagram/${igId}.mp4` : "";
+      if (localMp4 && (lookupFile(localMp4) || publicFile(localMp4))) {
+        playable = localMp4;
+        mediaKind = "video";
+      } else {
+        playable = playable.replace(/\/embed\/?.*$/i, "/embed/");
+        playable = withParam(playable, "autoplay", "1");
+        playable = withParam(playable, "muted", "1");
+      }
+    } else {
+      // YouTube: mute+autoplay so the first tap always starts playback (browsers block unmuted autoplay).
+      playable = playable.replace(
+        /(?:www\.)?youtube\.com\/embed\//i,
+        "www.youtube-nocookie.com/embed/",
+      );
+      playable = withParam(playable, "autoplay", "1");
+      playable = withParam(playable, "mute", "1");
+      playable = withParam(playable, "playsinline", "1");
+      playable = withParam(playable, "rel", "0");
+    }
     const ratio = "16/9";
     const poster = videoPoster(src);
     const youtubeId = poster.includes("i.ytimg.com/vi/") ? poster.match(/\/vi\/([^/]+)\//)?.[1] : "";
@@ -720,22 +1057,26 @@ function optimizeHtml(html: string, canonicalPath: string) {
             ? ` onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg'"`
             : ` onerror="this.remove()"`
         }>`
-      : "";
-    if (isInstagram) {
-      // Prefer a real thumbnail when we have one; otherwise keep the Instagram face fallback.
-      const face = image
-        ? ""
-        : `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`;
-      return `<button type="button" class="cdj-lite cdj-lite--ig${image ? " cdj-lite--poster" : ""}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}">${image}${face}<span class="cdj-play"></span></button>`;
-    }
-    return `<button type="button" class="cdj-lite" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}">${image}<span class="cdj-play"></span></button>`;
+      : isInstagram
+        ? `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`
+        : "";
+    const igClass = isInstagram ? " cdj-lite--ig" : "";
+    const posterClass = image && isInstagram ? " cdj-lite--poster" : "";
+    // Inline onclick is the reliable one-tap path; delegated listeners are a backup.
+    return `<button type="button" class="cdj-lite${igClass}${posterClass}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-kind="${mediaKind}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}" onclick="return window.cdjPlay&&window.cdjPlay(this)">${image}<span class="cdj-play"></span></button>`;
   });
+
+  // Keep activated IG embeds out of the old portrait crop/scale path in page scripts.
+  next = next.replace(
+    /if\s*\(\s*crop\.querySelector\(\s*(["'])\.cdj-lite\1\s*\)\s*\)/g,
+    'if (crop.querySelector(".cdj-lite, .dj-ig-frame"))',
+  );
 
   if (!next.includes('id="cdj-runtime"')) {
     next = next.replace(
       /<\/body>/i,
-      `<style id="cdj-a11y">.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0!important}.slider-wrap .slider-dots{gap:12px!important}.slider-wrap .slider-dot,.slider-wrap .slider-dot.slider-active,.slider-wrap .slider-dot:hover,#page .slider-dots .slider-dot{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;transform:none!important;-webkit-transform:none!important}</style>
-<script id="cdj-runtime" type="module">
+      `<style id="cdj-a11y">.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0!important}.slider-wrap .slider-dots{gap:12px!important}.slider-wrap .slider-dot,.slider-wrap .slider-dot.slider-active,.slider-wrap .slider-dot:hover,#page .slider-dots .slider-dot{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;transform:none!important;-webkit-transform:none!important}.dj-ig-crop:has(.cdj-lite--ig),.dj-ig-crop:has(.dj-ig-frame){display:block!important;width:100%!important;max-width:100%!important;margin:0!important;aspect-ratio:16/9!important;overflow:hidden!important;position:relative!important;height:auto!important;border-radius:0!important;box-shadow:none!important}.dj-ig-crop:has(.cdj-lite--ig) .dj-ig-canvas,.dj-ig-crop:has(.dj-ig-frame) .dj-ig-canvas{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;transform:none!important}.dj-ig-crop .cdj-lite--ig,.dj-ig-crop .dj-ig-frame{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:auto!important;aspect-ratio:16/9!important;max-width:none!important;border:0!important;transform:none!important;background:#111!important;overflow:hidden!important}.dj-ig-crop .cdj-lite--ig img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important}</style>
+<script id="cdj-runtime">
 const NAV_LINK="nav.site-nav a, nav.utility-nav a";
 const pageCache=new Map();
 let navToken=0;
@@ -751,26 +1092,59 @@ function navUrl(link){
 }
 function normalizeIgLite(){
   document.querySelectorAll(".dj-ig-crop").forEach((crop)=>{
-    if(!crop.querySelector(".cdj-lite"))return;
+    const frame=crop.querySelector(".cdj-lite--ig,.dj-ig-frame,iframe[src*='instagram.com'],video.cdj-local-video");
+    if(!frame)return;
     const canvas=crop.querySelector(".dj-ig-canvas");
+    // Full-width 16/9 like YouTube — kill old portrait/full-bleed crop math.
     crop.style.setProperty("width","100%","important");
     crop.style.setProperty("max-width","100%","important");
     crop.style.setProperty("margin-left","0px","important");
     crop.style.setProperty("margin-right","0px","important");
     crop.style.setProperty("aspect-ratio","16 / 9","important");
     crop.style.setProperty("height","auto","important");
-    if(!canvas)return;
-    canvas.style.setProperty("position","relative","important");
-    canvas.style.setProperty("inset","auto","important");
-    canvas.style.setProperty("width","100%","important");
-    canvas.style.setProperty("height","auto","important");
-    canvas.style.setProperty("transform","none","important");
-    canvas.style.setProperty("transform-origin","initial","important");
+    crop.style.setProperty("overflow","hidden","important");
+    crop.style.setProperty("position","relative","important");
+    if(canvas){
+      canvas.style.setProperty("position","relative","important");
+      canvas.style.setProperty("inset","auto","important");
+      canvas.style.setProperty("width","100%","important");
+      canvas.style.setProperty("height","auto","important");
+      canvas.style.setProperty("transform","none","important");
+      canvas.style.setProperty("transform-origin","initial","important");
+    }
+    frame.style.setProperty("position","relative","important");
+    frame.style.setProperty("inset","auto","important");
+    frame.style.setProperty("display","block","important");
+    frame.style.setProperty("width","100%","important");
+    frame.style.setProperty("height","auto","important");
+    frame.style.setProperty("aspect-ratio","16 / 9","important");
+    frame.style.setProperty("max-width","none","important");
+    frame.style.setProperty("border","0","important");
+    frame.style.setProperty("transform","none","important");
   });
 }
 normalizeIgLite();
 setTimeout(normalizeIgLite,350);
 setTimeout(normalizeIgLite,1250);
+// Page script fitInstagram() re-applies old portrait crop math once .cdj-lite is gone.
+// Wrap it so activated IG iframes stay visible/playable after the first click.
+(function patchFitInstagram(){
+  const apply=()=>{
+    const orig=window.cdjFitInstagram;
+    if(!orig||orig.__cdjPatched)return !!orig;
+    function wrapped(){
+      orig.apply(this,arguments);
+      normalizeIgLite();
+    }
+    wrapped.__cdjPatched=true;
+    window.cdjFitInstagram=wrapped;
+    return true;
+  };
+  if(!apply()){
+    const t=setInterval(()=>{if(apply())clearInterval(t);},100);
+    setTimeout(()=>clearInterval(t),5000);
+  }
+})();
 function loadPage(url){
   const key=url.pathname+url.search;
   if(pageCache.has(key))return pageCache.get(key);
@@ -844,9 +1218,97 @@ document.addEventListener("focusin",(event)=>{
   if(url)loadPage(url).catch(()=>{});
 });
 window.addEventListener("popstate",()=>{showPage(new URL(location.href),true);});
+function activateLite(lite){
+  if(!lite||lite.dataset.cdjPlaying==="1")return false;
+  lite.dataset.cdjPlaying="1";
+  const src=lite.dataset.src||"";
+  const crop=lite.closest(".dj-ig-crop");
+  // Local MP4 (Instagram reels hosted under /media/instagram/) — real in-page play.
+  // Avoid \\? in this TS template literal — it becomes a broken (?|$) regex in the browser.
+  if(lite.dataset.kind==="video"||src.indexOf(".mp4")!==-1){
+    const video=document.createElement("video");
+    video.className="dj-ig-frame cdj-local-video";
+    video.src=src;
+    video.controls=true;
+    video.autoplay=true;
+    video.playsInline=true;
+    video.setAttribute("playsinline","");
+    video.setAttribute("webkit-playsinline","");
+    video.preload="auto";
+    video.title=lite.dataset.title||"Video";
+    video.style.cssText="width:100%;aspect-ratio:16/9;display:block;background:#111;object-fit:contain;border:0";
+    lite.replaceWith(video);
+    const play=video.play();
+    if(play&&typeof play.catch==="function")play.catch(()=>{});
+    if(crop)normalizeIgLite();
+    return false;
+  }
+  const frame=document.createElement("iframe");
+  // Assign src in the same turn as the user gesture so autoplay is allowed.
+  frame.setAttribute("src",src);
+  frame.title=lite.dataset.title||"Video";
+  frame.setAttribute("allow","accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+  frame.setAttribute("allowfullscreen","");
+  frame.allowFullscreen=true;
+  frame.referrerPolicy="strict-origin-when-cross-origin";
+  frame.style.border="0";
+  if(lite.classList.contains("cdj-frame-lite")){
+    frame.style.width="100%";
+    const h=lite.dataset.height||"1500px";
+    frame.style.minHeight=h;
+    frame.style.height=h;
+  }else if(lite.classList.contains("cdj-lite--ig")){
+    frame.scrolling="no";
+    frame.className="dj-ig-frame fitvidsignore";
+    frame.style.width="100%";
+    frame.style.aspectRatio=lite.dataset.ratio||"16/9";
+    frame.style.maxWidth="none";
+    frame.style.transform="none";
+  }else{
+    frame.style.width="100%";
+    frame.style.aspectRatio=lite.dataset.ratio||"16/9";
+    frame.style.minHeight="200px";
+  }
+  lite.replaceWith(frame);
+  if(crop){
+    normalizeIgLite();
+    if(typeof window.cdjFitInstagram==="function")window.cdjFitInstagram();
+    normalizeIgLite();
+  }
+  return false;
+}
+window.cdjPlay=function(el){activateLite(el);return false;};
+function onLitePointer(event){
+  if(event.pointerType==="mouse"&&event.button!==0)return;
+  const target=event.target;
+  if(!(target instanceof Element))return;
+  const lite=target.closest(".cdj-lite,.cdj-frame-lite");
+  if(!lite||lite.dataset.cdjPlaying==="1")return;
+  event.preventDefault();
+  event.stopPropagation();
+  activateLite(lite);
+}
+// pointerdown = first tap (most reliable one-click on mobile + desktop).
+document.addEventListener("pointerdown",onLitePointer,true);
+document.addEventListener("keydown",(event)=>{
+  if(event.key!=="Enter"&&event.key!==" ")return;
+  const target=event.target;
+  if(!(target instanceof Element))return;
+  const lite=target.closest(".cdj-lite,.cdj-frame-lite");
+  if(!lite)return;
+  event.preventDefault();
+  activateLite(lite);
+});
 document.addEventListener("click",(event)=>{
   const target=event.target;
   if(!(target instanceof Element))return;
+  const liteClick=target.closest(".cdj-lite,.cdj-frame-lite");
+  if(liteClick){
+    if(liteClick.dataset.cdjPlaying!=="1")activateLite(liteClick);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   const toggle=target.closest(".nav-toggle");
   if(toggle){
     const wrap=toggle.closest(".site-nav-wrap,.header-bar");
@@ -861,28 +1323,6 @@ document.addEventListener("click",(event)=>{
   if(parentLink&&window.matchMedia("(max-width: 60em)").matches){
     const sub=parentLink.parentElement&&parentLink.parentElement.querySelector(":scope > .sub-menu");
     if(sub&&!sub.classList.contains("toggled-on")){event.preventDefault();sub.classList.add("toggled-on");return;}
-  }
-  const lite=target.closest(".cdj-lite");
-  if(lite){
-    const frame=document.createElement("iframe");
-    frame.src=lite.dataset.src||"";
-    frame.title=lite.dataset.title||"Video";
-    frame.allow="autoplay; encrypted-media; picture-in-picture";
-    frame.allowFullscreen=true;
-    frame.style.border="0";
-    if(lite.classList.contains("cdj-lite--ig")){
-      frame.width="540";
-      frame.height="1000";
-      frame.scrolling="no";
-      frame.className="dj-ig-frame fitvidsignore";
-    }else{
-      frame.style.width="100%";
-      frame.style.aspectRatio=lite.dataset.ratio||"16/9";
-    }
-    const crop=lite.closest(".dj-ig-crop");
-    lite.replaceWith(frame);
-    if(crop&&typeof window.cdjFitInstagram==="function")window.cdjFitInstagram();
-    return;
   }
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
   const link=target.closest(NAV_LINK);
@@ -907,6 +1347,11 @@ document.addEventListener("click",(event)=>{
     return updated;
   });
   next = scrubHtmlFootprints(next);
+  // Final pass: heading-order for sidebar titles (must run after class scrub).
+  next = next.replace(
+    /<(h[3-6])(\s[^>]*\bpanel-title\b[^>]*)>([\s\S]*?)<\/\1>/gi,
+    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
+  );
   return next;
 }
 
@@ -920,8 +1365,6 @@ export function rewriteHtml(
   const pageUrl = new URL(canonical);
   const protectedSeo = protectSeoBlocks(html);
   let next = protectedSeo.html;
-  next = next.replace(/<!--\s*Mirrored from[\s\S]*?-->\s*/gi, "");
-  next = next.replace(/<!--\s*Added by HTTrack\s*-->[\s\S]*?<!--\s*\/Added by HTTrack\s*-->\s*/gi, "");
   next = rewriteAbsoluteAssetUrls(next);
 
   next = next.replace(
@@ -945,6 +1388,8 @@ export function rewriteHtml(
     },
   );
 
+  // Drop comments so commented-out legacy images (e.g. missing IMG_4247) are not revived.
+  next = next.replace(/<!--[\s\S]*?-->/g, "");
   next = revealLazyImages(next);
   next = forceSeoUrls(next, canonical);
   next = absolutizeMetaImages(next);

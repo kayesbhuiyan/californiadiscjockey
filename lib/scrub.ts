@@ -189,7 +189,11 @@ export function scrubHtmlFootprints(html: string) {
   next = next.replace(/<!--\s*\/\s*Yoast SEO plugin\s*-->/gi, "");
   next = next.replace(/<!--\s*HFCM by 99 Robots[\s\S]*?-->/gi, "");
   next = next.replace(/<!--\s*\/end HFCM by 99 Robots\s*-->/gi, "");
-  next = next.replace(/<!--\s*Mirrored from[\s\S]*?-->/gi, "");
+  // HTTrack mirror comments / injected charset meta — safe to drop; charset comes from the app.
+  next = next.replace(/<!--\s*Mirrored from[\s\S]*?-->\s*/gi, "");
+  next = next.replace(/<!--\s*Added by HTTrack\s*-->[\s\S]*?<!--\s*\/Added by HTTrack\s*-->\s*/gi, "");
+  next = next.replace(/<!--[\s\S]*?\bHTTrack\b[\s\S]*?-->\s*/gi, "");
+  next = next.replace(/<meta\b[^>]*http-equiv=(["'])content-type\1[^>]*>\s*/gi, "");
   next = next.replace(/<meta\b[^>]*name=(["'])generator\1[^>]*>/gi, "");
   next = next.replace(/<link\b[^>]*rel=(["'])(?:EditURI|wlwmanifest|https:\/\/api\.w\.org\/|shortlink)\1[^>]*>/gi, "");
   next = next.replace(/<link\b[^>]*rel=(["'])alternate\1[^>]*>/gi, (tag) => {
