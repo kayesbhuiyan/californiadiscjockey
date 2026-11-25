@@ -6,7 +6,7 @@ import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "55";
+export const CSS_BUNDLE_VERSION = "56";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -759,7 +759,18 @@ function optimizedImage(src: string, widthAttr: string | undefined) {
 }
 
 function videoPoster(src: string) {
-  const youtube = src.match(/(?:youtube\.com\/(?:embed\/|shorts\/|watch\?v=)|youtube-nocookie\.com\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  // Playlist / channel-upload embeds use /embed/videoseries?list=... (no single video id).
+  const playlist = src.match(/[?&]list=([A-Za-z0-9_-]+)/i)?.[1];
+  if (playlist && /\/embed\/videoseries\b/i.test(src)) {
+    // Known channel uploads playlist thumbnail (Bayareadj / sanfranciscoweddings).
+    if (playlist === "UUnlcW8gakvxY8k_eTmyPDUQ") {
+      return "https://i.ytimg.com/vi/FQJAaQ12VOk/mqdefault.jpg";
+    }
+    return "";
+  }
+  const youtube = src.match(
+    /(?:youtube(?:-nocookie)?\.com\/(?:embed\/(?!videoseries\b)|shorts\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]{11})/i,
+  );
   if (youtube) return `https://i.ytimg.com/vi/${youtube[1]}/mqdefault.jpg`;
   const vimeo = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
