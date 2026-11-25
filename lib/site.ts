@@ -789,8 +789,8 @@ function optimizeHtml(html: string, canonicalPath: string) {
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
   type LcpCand = { src: string; srcset: string; sizes: string; key: string };
-  let sliderCand: LcpCand | null = null;
-  let contentCand: LcpCand | null = null;
+  // Object bag so TypeScript still sees LcpCand | null after the replace() callback.
+  const lcpCands: { slider: LcpCand | null; content: LcpCand | null } = { slider: null, content: null };
   let inSlider = false;
   let inMainContent = false;
   let postBodyAt = -1;
@@ -842,9 +842,9 @@ function optimizeHtml(html: string, canonicalPath: string) {
         sizes: readAttr(updated, "sizes") || "",
         key: readAttr(updated, "src") || src,
       };
-      if (!tiny && !chrome && inSlider && !sliderCand) sliderCand = cand;
-      if (!tiny && !chrome && inMainContent && !contentCand) {
-        contentCand = cand;
+      if (!tiny && !chrome && inSlider && !lcpCands.slider) lcpCands.slider = cand;
+      if (!tiny && !chrome && inMainContent && !lcpCands.content) {
+        lcpCands.content = cand;
         contentAt = offset;
       }
       updated = removeAttr(updated, "fetchpriority");
@@ -856,9 +856,13 @@ function optimizeHtml(html: string, canonicalPath: string) {
   // Mobile PSI: compact hero slider (~140px) is LCP when the first content image sits deep
   // in post-body (events). When content image is near the top of post-body (corporate), it wins.
   const contentDepth = postBodyAt >= 0 && contentAt >= 0 ? contentAt - postBodyAt : 99999;
-  const preferContent = !!contentCand && (!sliderCand || contentDepth < 3500);
-  const winner = preferContent ? contentCand : sliderCand || contentCand;
-  const secondary = preferContent ? sliderCand : contentCand;
+  const preferContent = !!lcpCands.content && (!lcpCands.slider || contentDepth < 3500);
+  const winner = preferContent ? lcpCands.content : lcpCands.slider || lcpCands.content;
+  const secondary = preferContent ? lcpCands.slider : lcpCands.content;
+  const winnerSrc = winner?.src || "";
+  const winnerKey = winner?.key || "";
+  const secondarySrc = secondary?.src || "";
+  const secondaryKey = secondary?.key || "";
   // Single small preload URL — imagesrcset can make mobile pick a heavier 1080w candidate.
   const compactLcpSrc = (src: string) => {
     try {
@@ -872,27 +876,27 @@ function optimizeHtml(html: string, canonicalPath: string) {
     }
   };
   let lcpLinks = "";
-  if (winner) {
-    const compact = compactLcpSrc(winner.src);
+  if (winnerSrc && winnerKey) {
+    const compact = compactLcpSrc(winnerSrc);
     lcpLinks += `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
     next = next.replace(/<img\b[^>]*>/gi, (tag) => {
       const src = readAttr(tag, "src") || "";
-      if (src !== winner!.key && src !== winner!.src) return tag;
+      if (src !== winnerKey && src !== winnerSrc) return tag;
       let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
       updated = setAttr(updated, "src", compact);
       updated = setAttr(updated, "sizes", "100vw");
       return setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
     });
   }
-  if (secondary && secondary.key !== winner?.key) {
+  if (secondarySrc && secondaryKey && secondaryKey !== winnerKey) {
     next = next.replace(/<img\b[^>]*>/gi, (tag) => {
       const src = readAttr(tag, "src") || "";
-      if (src !== secondary!.key && src !== secondary!.src) return tag;
+      if (src !== secondaryKey && src !== secondarySrc) return tag;
       if (/fetchpriority="high"/i.test(tag)) return tag;
       return setAttr(removeAttr(tag, "loading"), "loading", "eager");
     });
   }
-  if (!winner) {
+  if (!winnerSrc) {
     // Absolute fallback: first substantial image in the document.
     let assigned = false;
     next = next.replace(/<img\b[^>]*>/gi, (tag) => {
