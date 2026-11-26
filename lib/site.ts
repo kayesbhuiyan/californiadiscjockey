@@ -6,7 +6,11 @@ import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "70";
+export const CSS_BUNDLE_VERSION = "76";
+/** Single site font — homepage title/nav face, applied everywhere. */
+const SITE_FONT = '"Titillium Web",Arial,Helvetica,sans-serif';
+const SITE_FONT_FACES = `@font-face{font-family:'Titillium Web';font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/titillium-web/NaPecZTIAOhVxoMyOr9n_E7fdMPmDQ.woff2) format('woff2')}@font-face{font-family:'Titillium Web';font-style:normal;font-weight:700;font-display:swap;src:url(/assets/fonts/titillium-web/NaPDcZTIAOhVxoMyOr9n_E7ffHjDGItzYw.woff2) format('woff2')}`;
+const SITE_FONT_LOCK = `${SITE_FONT_FACES}:root{--text-font:${SITE_FONT}!important;--title-font:${SITE_FONT}!important;--navi-font:${SITE_FONT}!important;--widget-title-font:${SITE_FONT}!important}html,body,button,input,select,textarea,h1,h2,h3,h4,h5,h6,p,li,a,span,div,label,td,th,blockquote,.site-title,.brand-title,.page-title,.entry-title,.widget-title,.headline,.quote-text,.author,.cta-link,.reviews-word,.cdj-text,.cdj-frame-lite{font-family:${SITE_FONT}!important}`;
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -668,7 +672,7 @@ function homeCriticalCss() {
   const match = raw.match(/<style\b[^>]*class=(["'])two_critical_css\1[^>]*>([\s\S]*?)<\/style>/i);
   // Drop @font-face from critical CSS — fonts use font-display:optional and block FCP.
   homeCriticalCssCache = match
-    ? minifyCss(match[2].replace(/@font-face\s*\{[^{}]*\}/gi, ""))
+    ? minifyCss(unifySiteFontCss(match[2].replace(/@font-face\s*\{[^{}]*\}/gi, "")))
     : null;
   return homeCriticalCssCache;
 }
@@ -680,6 +684,19 @@ function minifyCss(css: string) {
     .replace(/\s*([{};:,])\s*/g, "$1")
     .replace(/;}/g, "}")
     .trim();
+}
+
+/** Force homepage Titillium Web everywhere — drop Purista / Open Sans / Georgia stacks. */
+function unifySiteFontCss(css: string) {
+  return css
+    .replace(/--text-font\s*:[^;!}]+/gi, `--text-font:${SITE_FONT}`)
+    .replace(/--title-font\s*:[^;!}]+/gi, `--title-font:${SITE_FONT}`)
+    .replace(/--navi-font\s*:[^;!}]+/gi, `--navi-font:${SITE_FONT}`)
+    .replace(/--widget-title-font\s*:[^;!}]+/gi, `--widget-title-font:${SITE_FONT}`)
+    .replace(
+      /font-family\s*:\s*(?:'Purista'|"Purista"|Purista|'Open Sans'|"Open Sans"|Open Sans|Georgia(?:\s*,\s*'Times New Roman')?)[^;!}]*/gi,
+      `font-family:${SITE_FONT}`,
+    );
 }
 
 function localStylesheets(raw: string, pageFile: string) {
@@ -752,7 +769,7 @@ export function renderPageCss(pagePath: string, kind: "block" | "defer") {
           }
           return block.replace(/@font-face\s*\{/i, "@font-face{font-display:optional;");
         });
-  const cleaned = minifyCss(scrubCss(withFaces));
+  const cleaned = minifyCss(unifySiteFontCss(scrubCss(withFaces)));
   cssBundleCache.set(key, cleaned);
   return cleaned;
 }
@@ -847,6 +864,96 @@ function dropScript(tag: string, body: string) {
   return false;
 }
 
+/**
+ * Ensure page content uses a proper h1–h6 outline:
+ * one content h1, no skipped levels, brand/widgets/forms at correct roles.
+ */
+function normalizePageHeadings(html: string): string {
+  const blocks: string[] = [];
+  let next = html.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, (block) => {
+    blocks.push(block);
+    return `%%HEAD_BLK_${blocks.length - 1}%%`;
+  });
+
+  // Site name is branding, not the page title.
+  next = next.replace(
+    /<(h1)(\s[^>]*\b(?:brand-title|site-title)\b[^>]*)>([\s\S]*?)<\/h1>/gi,
+    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
+  );
+
+  // Drop empty headings (corporate page has blank h3s).
+  next = next.replace(/<h([1-6])(\s[^>]*)?>\s*(?:&nbsp;|\u00a0|\s)*<\/h\1>/gi, "");
+
+  // Comment form chrome — keep text, leave the content outline alone.
+  next = next.replace(
+    /<(h[1-6])(\s[^>]*\bcomment-reply-title\b[^>]*)>([\s\S]*?)<\/\1>/gi,
+    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
+  );
+
+  // Sidebar widget titles belong at h2 after the page h1 (not h3 / not <p>).
+  next = next.replace(
+    /<(?:h[1-6]|p)(\s[^>]*\b(?:panel-title|widget-title)\b[^>]*)>([\s\S]*?)<\/(?:h[1-6]|p)>/gi,
+    (_m, attrs: string, content: string) => `<h2${attrs}>${content}</h2>`,
+  );
+
+  // Pages with only brand/listing titles need a real content h1 (before any h2+).
+  if (!/<h1\b/i.test(next)) {
+    const titleText =
+      next
+        .match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+        ?.replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&#8211;/g, "–")
+        .replace(/&#8212;/g, "—")
+        .replace(/\s+/g, " ")
+        .split("|")[0]
+        ?.trim() || "California Disc Jockey";
+    const safe = titleText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const h1 = `<h1 class="post-title">${safe}</h1>`;
+    if (/\b(?:main-content|site-content)\b/i.test(next)) {
+      next = next.replace(/(<(?:div|main)\b[^>]*\b(?:main-content|site-content)\b[^>]*>)/i, `$1${h1}`);
+    } else if (/\b(?:main-column|site-main|content-area)\b/i.test(next)) {
+      next = next.replace(
+        /(<(?:div|main)\b[^>]*\b(?:main-column|site-main|content-area)\b[^>]*>)/i,
+        `$1${h1}`,
+      );
+    } else if (/<h[1-6]\b/i.test(next)) {
+      next = next.replace(/<h[1-6]\b/i, (tag) => `${h1}${tag}`);
+    } else {
+      next = next.replace(/<body\b[^>]*>/i, (body) => `${body}${h1}`);
+    }
+  }
+
+  let lastLevel = 0;
+  let sawH1 = false;
+  next = next.replace(/<(h[1-6])(\s[^>]*)?>([\s\S]*?)<\/\1>/gi, (_full, tag: string, attrs = "", content: string) => {
+    const className = String(attrs).match(/\bclass\s*=\s*(["'])([\s\S]*?)\1/i)?.[2] || "";
+    if (/\b(?:panel-title|widget-title)\b/i.test(className)) {
+      lastLevel = 2;
+      return `<h2${attrs}>${content}</h2>`;
+    }
+
+    let level = Number(tag[1]);
+    if (level === 1) {
+      if (sawH1) level = lastLevel > 0 ? Math.min(lastLevel + 1, 2) : 2;
+      else {
+        sawH1 = true;
+        lastLevel = 1;
+        return `<h1${attrs}>${content}</h1>`;
+      }
+    }
+
+    if (sawH1 && level > lastLevel + 1) level = lastLevel + 1;
+    if (level < 1) level = 1;
+    if (level > 6) level = 6;
+    lastLevel = level;
+    return `<h${level}${attrs}>${content}</h${level}>`;
+  });
+
+  next = next.replace(/%%HEAD_BLK_(\d+)%%/g, (_m, index: string) => blocks[Number(index)] ?? "");
+  return next;
+}
+
 function optimizeHtml(html: string, canonicalPath: string) {
   let next = html.replace(/<style\b[^>]*id=(["'])global-styles-inline-css\1[^>]*>[\s\S]*?<\/style>/gi, "");
   // Noscript image duplicates steal LCP priority and bandwidth; real lazy imgs already exist.
@@ -856,6 +963,11 @@ function optimizeHtml(html: string, canonicalPath: string) {
     /\s+data-(?:mce-(?:type|style|bogus)|path-to-node|index-in-node|mce-selected)=["'][^"']*["']/gi,
     "",
   );
+  // Inline style= font stacks (Purista / Open Sans / Georgia) → Titillium Web.
+  next = next.replace(/\sstyle=(["'])([\s\S]*?)\1/gi, (full, quote: string, style: string) => {
+    if (!/font-family|Purista|Open Sans|Georgia/i.test(style)) return full;
+    return ` style=${quote}${unifySiteFontCss(style)}${quote}`;
+  });
   next = next.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_full, attrs: string, body: string) => {
     let css = body
       .replace(/#20a0cf/gi, "#2278b0")
@@ -863,11 +975,11 @@ function optimizeHtml(html: string, canonicalPath: string) {
       .replace(/(\.banner\s+a\[href\^=["']tel:["']\]\s*\{\s*color\s*:\s*)#ff0000/gi, "$1#c00000");
     const id = (/id=(["'])([^"']+)\1/i.exec(attrs)?.[2] || "").toLowerCase();
     const cls = (/class=(["'])([^"']+)\1/i.exec(attrs)?.[2] || "").toLowerCase();
-    // Critical path CSS should not download fonts before first paint.
+    // Drop legacy multi-font faces — site-wide Titillium Web is injected via cdj-speed.
     if (id === "cdj-critical" || cls.includes("two_critical_css") || cls.includes("two_critical_font")) {
       css = css.replace(/@font-face\s*\{[^{}]*\}/gi, "");
     }
-    css = minifyCss(css);
+    css = minifyCss(unifySiteFontCss(css));
     if (!css) return "";
     // Keep inline CSS blocking so layout doesn't shift when deferred theme CSS arrives.
     return `<style${attrs}>${css}</style>`;
@@ -933,10 +1045,12 @@ function optimizeHtml(html: string, canonicalPath: string) {
   }
   const deferHref = `/_css?p=${encodeURIComponent(canonicalPath)}&k=defer&v=${CSS_BUNDLE_VERSION}`;
   const bundleLinks = [
+    `<link rel="preload" as="font" type="font/woff2" href="/assets/fonts/titillium-web/NaPecZTIAOhVxoMyOr9n_E7fdMPmDQ.woff2" crossorigin>`,
+    `<link rel="preload" as="font" type="font/woff2" href="/assets/fonts/titillium-web/NaPDcZTIAOhVxoMyOr9n_E7ffHjDGItzYw.woff2" crossorigin>`,
     deferCss
       ? `<link rel="stylesheet" href="${deferHref}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="${deferHref}"></noscript>`
       : "",
-    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px;position:sticky;top:0;z-index:10000}.brand-header .site-nav-wrap,.site-header .site-nav-wrap{position:relative;z-index:10001}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;aspect-ratio:1920/481;overflow:hidden;background:#111;position:relative}.sis-slider-wrapper .sis-slider,.slider-wrap .slider{position:relative;width:100%;height:100%!important}.sis-slider-wrapper .sis-slide,.slider-wrap .slider-slide{height:100%!important}.sis-slider-wrapper.sis-fade .sis-slide.sis-active,.slider-wrap.slider-fade .slider-slide.slider-active{position:relative!important;inset:auto!important;height:100%!important;opacity:1!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:center center!important}.dj-card-image{aspect-ratio:16/9;overflow:hidden;background:#111}.dj-card-image img{width:100%;height:100%;object-fit:cover}.post-body img[width][height]{height:auto}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{aspect-ratio:16/9;height:auto!important;max-height:none!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{height:100%!important;max-height:none!important}.sis-slider-wrapper .sis-dots,.slider-wrap .slider-dots,.sis-slider-wrapper .slider-dots{bottom:10px!important;z-index:5}}@media (max-width:60em){.brand-header:has(.site-nav.toggled-on),.site-header:has(.site-nav.toggled-on),html.cdj-menu-open .brand-header,html.cdj-menu-open .site-header{max-height:100dvh;max-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.site-nav.toggled-on,.site-nav.toggled-on>ul{max-height:none!important;overflow:visible!important}.site-nav .sub-menu.toggled-on,.site-nav ul ul.toggled-on{display:block!important}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}.page-footer,.footer-widgets-wrap,.footer-panels,.footer-bar,#footer,.comment-respond,.dj-media,.dj-instagram,.dj-grid{content-visibility:auto;contain-intrinsic-size:800px}.slider-wrap .slider-slide{display:none}.slider-wrap .slider-slide.slider-active{display:block!important;opacity:1!important;position:relative!important;height:100%!important;inset:auto!important}.slider-wrap .slider-slide.slider-active img{opacity:1!important;visibility:visible!important}</style>`,
+    `<style id="cdj-speed">${SITE_FONT_LOCK}html{font-family:${SITE_FONT}}body{margin:0;background:#fff;color:#333;font-family:${SITE_FONT}}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px;position:relative;z-index:10000}@media (min-width:60.01em){.brand-header,.site-header{position:sticky;top:0}}.brand-header .site-nav-wrap,.site-header .site-nav-wrap{position:relative;z-index:10001}.nav-toggle{display:none}.nav-toggle .nav-toggle-text,.nav-toggle .menu-toggle-text{display:none}@media (max-width:59.99em){.nav-toggle{display:inline-flex;align-items:center;gap:.75em}.nav-toggle .nav-toggle-text,.nav-toggle .menu-toggle-text{display:inline-block;margin-left:.75em}}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.page-footer .footer-info,.page-footer .site-info,#footer-text{float:none;width:100%;text-align:center}.page-footer .credit-link{display:inline-block}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;aspect-ratio:1920/481;overflow:hidden;background:#111;position:relative}.sis-slider-wrapper .sis-slider,.slider-wrap .slider{position:relative;width:100%;height:100%!important}.sis-slider-wrapper .sis-slide,.slider-wrap .slider-slide{height:100%!important}.sis-slider-wrapper.sis-fade .sis-slide.sis-active,.slider-wrap.slider-fade .slider-slide.slider-active{position:relative!important;inset:auto!important;height:100%!important;opacity:1!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:center center!important}.dj-card-image{aspect-ratio:16/9;overflow:hidden;background:#111}.dj-card-image img{width:100%;height:100%;object-fit:cover}.post-body img[width][height]{height:auto}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{aspect-ratio:16/9;height:auto!important;max-height:none!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{height:100%!important;max-height:none!important}.sis-slider-wrapper .sis-dots,.slider-wrap .slider-dots,.sis-slider-wrapper .slider-dots{bottom:10px!important;z-index:5}}@media (max-width:60em){.brand-header:has(.site-nav.toggled-on),.site-header:has(.site-nav.toggled-on),html.cdj-menu-open .brand-header,html.cdj-menu-open .site-header{max-height:100dvh;max-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.site-nav.toggled-on,.site-nav.toggled-on>ul{max-height:none!important;overflow:visible!important}.site-nav .sub-menu.toggled-on,.site-nav ul ul.toggled-on{display:block!important}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 ${SITE_FONT};cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}.page-footer,.footer-widgets-wrap,.footer-panels,.footer-bar,#footer,.comment-respond,.dj-media,.dj-instagram,.dj-grid{content-visibility:auto;contain-intrinsic-size:800px}.slider-wrap .slider-slide{display:none}.slider-wrap .slider-slide.slider-active{display:block!important;opacity:1!important;position:relative!important;height:100%!important;inset:auto!important}.slider-wrap .slider-slide.slider-active img{opacity:1!important;visibility:visible!important}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
@@ -1094,9 +1208,11 @@ function optimizeHtml(html: string, canonicalPath: string) {
       return updated;
     });
   }
-  // Hoist LCP preload to the first bytes of <head> so it isn't stuck behind ~35KB critical CSS.
+  // Hoist LCP image preload early; keep font preloads (do not strip as="font").
   if (lcpLinks) {
-    next = next.replace(/<link[^>]*rel=["']preload["'][^>]*>/gi, "");
+    next = next.replace(/<link[^>]*rel=["']preload["'][^>]*>/gi, (tag) =>
+      /\bas=["']font["']/i.test(tag) ? tag : "",
+    );
     next = next.replace(/<head[^>]*>/i, (head) => `${head}${lcpLinks}`);
   }
 
@@ -1117,12 +1233,6 @@ function optimizeHtml(html: string, canonicalPath: string) {
     const label = title && !/^more$/i.test(title.trim()) ? title : "More details";
     return `<a ${attrs}>${before}${label}${after}</a>`;
   });
-
-  // Sidebar widget titles often start at h3 (heading-order audit). Keep text/classes; use <p>.
-  next = next.replace(
-    /<(h[3-6])(\s[^>]*\bpanel-title\b[^>]*)>([\s\S]*?)<\/\1>/gi,
-    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
-  );
 
   // Fix bare email anchors (no href) and image-only links missing accessible names — keep visible content.
   next = next.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (full, attrs: string, inner: string) => {
@@ -1199,9 +1309,23 @@ function optimizeHtml(html: string, canonicalPath: string) {
       if (!/loading=/i.test(updated)) updated = setAttr(updated, "loading", "lazy");
       return tag.replace(/^<iframe\b[^>]*>/i, updated);
     }
-    const title = (readAttr(open, "title") || "video").replace(/"/g, "&quot;");
+
+    // Keep YouTube / Vimeo as real iframes so page content matches the WP site.
+    // Instagram stays click-to-play (embed UX / LCP).
     const isInstagram = /instagram\.com/i.test(src);
-    // Keep autoplay in the deferred iframe src so the activating click counts as the user gesture.
+    if (!isInstagram) {
+      let updated = open;
+      // Prefer data-src when present (lazy WP embeds).
+      if (dataSrc && src === dataSrc) updated = setAttr(updated, "src", src);
+      if (!readAttr(updated, "title") && !readAttr(updated, "aria-label")) {
+        updated = setAttr(updated, "title", "YouTube video player");
+      }
+      if (!/loading=/i.test(updated)) updated = setAttr(updated, "loading", "lazy");
+      if (!/allowfullscreen/i.test(updated)) updated = setAttr(updated, "allowfullscreen", "allowfullscreen");
+      return tag.replace(/^<iframe\b[^>]*>/i, updated);
+    }
+
+    const title = (readAttr(open, "title") || "video").replace(/"/g, "&quot;");
     const withParam = (url: string, key: string, value: string) => {
       if (new RegExp(`[?&]${key}=`, "i").test(url)) {
         return url.replace(new RegExp(`([?&])${key}=[^&]*`, "i"), `$1${key}=${value}`);
@@ -1211,55 +1335,30 @@ function optimizeHtml(html: string, canonicalPath: string) {
     let playable = src;
     let mediaKind = "iframe";
     // Instagram's own embed "play" control is a link off-site. Prefer a local MP4
-    // (public/media/instagram/{id}.mp4) so one click plays on this page like YouTube.
-    if (isInstagram) {
-      const igId = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || "";
-      const localMp4 = igId ? `/media/instagram/${igId}.mp4` : "";
-      // Prefer CDN MP4 for in-page play. Do not require a serverless fs hit —
-      // public/media is excluded from the function bundle on Vercel.
-      if (localMp4) {
-        playable = localMp4;
-        mediaKind = "video";
-      } else {
-        playable = playable.replace(/\/embed\/?.*$/i, "/embed/");
-        playable = withParam(playable, "autoplay", "1");
-        playable = withParam(playable, "muted", "1");
-      }
+    // (public/media/instagram/{id}.mp4) so one click plays on this page.
+    const igId = src.match(/instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || "";
+    const localMp4 = igId ? `/media/instagram/${igId}.mp4` : "";
+    if (localMp4) {
+      playable = localMp4;
+      mediaKind = "video";
     } else {
-      // YouTube: mute+autoplay so the first tap always starts playback (browsers block unmuted autoplay).
-      playable = playable.replace(
-        /(?:www\.)?youtube\.com\/embed\//i,
-        "www.youtube-nocookie.com/embed/",
-      );
+      playable = playable.replace(/\/embed\/?.*$/i, "/embed/");
       playable = withParam(playable, "autoplay", "1");
-      playable = withParam(playable, "mute", "1");
-      playable = withParam(playable, "playsinline", "1");
-      playable = withParam(playable, "rel", "0");
+      playable = withParam(playable, "muted", "1");
     }
     const ratio = "16/9";
     const poster = videoPoster(src);
-    const youtubeId = poster.includes("i.ytimg.com/vi/") ? poster.match(/\/vi\/([^/]+)\//)?.[1] : "";
-    // Prefer direct CDN poster for Instagram — avoids Next image optimizer needing
-    // the file inside the serverless bundle (public/media is CDN-only on Vercel).
-    const useDirectPoster = isInstagram && poster.startsWith("/media/");
+    const useDirectPoster = poster.startsWith("/media/");
     const optimized = !useDirectPoster && poster.startsWith("/media/") ? optimizedImage(poster, "840") : null;
     const imageSrc = useDirectPoster ? poster : optimized?.src || poster;
     const hasPosterImg = Boolean(poster);
     const image = hasPosterImg
       ? `<img src="${imageSrc}" alt="" width="480" height="360" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer"${
           optimized?.srcset ? ` srcset="${optimized.srcset}" sizes="(max-width: 840px) 100vw, 840px"` : ""
-        }${
-          youtubeId
-            ? ` onerror="this.onerror=null;this.src='https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg'"`
-            : ` onerror="this.onerror=null;this.src='${poster.replace(/'/g, "")}'"`
-        }>`
-      : isInstagram
-        ? `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`
-        : "";
-    const igClass = isInstagram ? " cdj-lite--ig" : "";
-    const posterClass = hasPosterImg && isInstagram ? " cdj-lite--poster" : "";
-    // Inline onclick is the reliable one-tap path; delegated listeners are a backup.
-    return `<button type="button" class="cdj-lite${igClass}${posterClass}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-kind="${mediaKind}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}" onclick="return window.cdjPlay&&window.cdjPlay(this)">${image}<span class="cdj-play"></span></button>`;
+        } onerror="this.onerror=null;this.src='${poster.replace(/'/g, "")}'">`
+      : `<span class="cdj-ig-face" aria-hidden="true"><i></i><em>Instagram</em></span>`;
+    const posterClass = hasPosterImg ? " cdj-lite--poster" : "";
+    return `<button type="button" class="cdj-lite cdj-lite--ig${posterClass}" style="aspect-ratio:${ratio}" data-src="${playable.replace(/"/g, "&quot;")}" data-kind="${mediaKind}" data-title="${title}" data-ratio="${ratio}" aria-label="Play ${title}" onclick="return window.cdjPlay&&window.cdjPlay(this)">${image}<span class="cdj-play"></span></button>`;
   });
 
   // Keep activated IG embeds out of the old portrait crop/scale path in page scripts.
@@ -1567,12 +1666,13 @@ document.addEventListener("click",(event)=>{
     if (!/\sdefer(?:\s|=|>)/i.test(updated)) updated = updated.replace(/>$/, " defer>");
     return updated;
   });
-  next = scrubHtmlFootprints(next);
-  // Final pass: heading-order for sidebar titles (must run after class scrub).
   next = next.replace(
-    /<(h[3-6])(\s[^>]*\bpanel-title\b[^>]*)>([\s\S]*?)<\/\1>/gi,
-    (_m, _tag: string, attrs: string, content: string) => `<p${attrs}>${content}</p>`,
+    /<span\s+class=(["'])credit-link\1>[\s\S]*?<\/span>/i,
+    `<span class="credit-link">&copy; ${new Date().getFullYear()} California Disc Jockey. All rights reserved.</span>`,
   );
+  next = next.replace(/WordPress Theme:\s*Tortuga by ThemeZee\.?/gi, "");
+  next = scrubHtmlFootprints(next);
+  next = normalizePageHeadings(next);
   return next;
 }
 
