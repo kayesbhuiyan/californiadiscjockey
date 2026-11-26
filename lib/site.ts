@@ -6,7 +6,7 @@ import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "58";
+export const CSS_BUNDLE_VERSION = "70";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -645,6 +645,11 @@ function resolveLegacyAssetPath(href: string, pageFile: string) {
   return lookupFile(pathname);
 }
 
+function shouldOmitStylesheet(publicHref: string) {
+  // System/Titillium already cover first paint; skip heavy webfont CSS from the defer bundle.
+  return /google-fonts|\/assets\/fonts\/|fonts\.googleapis|font-awesome/i.test(publicHref);
+}
+
 function shouldDeferStylesheet(_publicHref: string, _tag: string, media: string) {
   if (media === "print") return true;
   // Homepage strategy for every page: critical CSS + deferred sheets.
@@ -687,6 +692,7 @@ function localStylesheets(raw: string, pageFile: string) {
     const file = resolveLegacyAssetPath(href, pageFile);
     if (!file || !isInsideRoot(file) || !fs.existsSync(file)) continue;
     const publicHref = canonicalPathForFile(file);
+    if (shouldOmitStylesheet(publicHref)) continue;
     const media = (readAttr(tag, "media") || "all").toLowerCase();
     const defer = shouldDeferStylesheet(publicHref, tag, media);
     sheets.push({ href: publicHref, file, defer });
@@ -733,15 +739,20 @@ export function renderPageCss(pagePath: string, kind: "block" | "defer") {
       if (!clean.startsWith("/") || !/\.(?:woff2?|ttf|otf|eot)$/i.test(clean)) return full;
       return lookupFile(clean) ? full : "none";
     })
-    .replace(/src:\s*none(?:\s+format\([^)]*\))?\s*,?/gi, "")
-    .replace(/@font-face\s*\{[^{}]*\}/gi, (block) => {
-      if (!/src\s*:/i.test(block)) return "";
-      if (/font-display\s*:/i.test(block)) {
-        return block.replace(/font-display:\s*[^;]+/gi, "font-display:optional");
-      }
-      return block.replace(/@font-face\s*\{/i, "@font-face{font-display:optional;");
-    });
-  const cleaned = minifyCss(scrubCss(css));
+    .replace(/src:\s*none(?:\s+format\([^)]*\))?\s*,?/gi, "");
+  // Defer bundle: drop @font-face entirely so font downloads can't contend with LCP.
+  // Block / inline path keeps optional faces for pages that still reference them.
+  const withFaces =
+    kind === "defer"
+      ? css.replace(/@font-face\s*\{[^{}]*\}/gi, "")
+      : css.replace(/@font-face\s*\{[^{}]*\}/gi, (block) => {
+          if (!/src\s*:/i.test(block)) return "";
+          if (/font-display\s*:/i.test(block)) {
+            return block.replace(/font-display:\s*[^;]+/gi, "font-display:optional");
+          }
+          return block.replace(/@font-face\s*\{/i, "@font-face{font-display:optional;");
+        });
+  const cleaned = minifyCss(scrubCss(withFaces));
   cssBundleCache.set(key, cleaned);
   return cleaned;
 }
@@ -840,6 +851,11 @@ function optimizeHtml(html: string, canonicalPath: string) {
   let next = html.replace(/<style\b[^>]*id=(["'])global-styles-inline-css\1[^>]*>[\s\S]*?<\/style>/gi, "");
   // Noscript image duplicates steal LCP priority and bandwidth; real lazy imgs already exist.
   next = next.replace(/<noscript>\s*<img\b[\s\S]*?<\/noscript>/gi, "");
+  // TinyMCE / HTTrack path bookmarks bloat corporate HTML (~14KB) and slow mobile parse.
+  next = next.replace(
+    /\s+data-(?:mce-(?:type|style|bogus)|path-to-node|index-in-node|mce-selected)=["'][^"']*["']/gi,
+    "",
+  );
   next = next.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_full, attrs: string, body: string) => {
     let css = body
       .replace(/#20a0cf/gi, "#2278b0")
@@ -882,8 +898,13 @@ function optimizeHtml(html: string, canonicalPath: string) {
   next = next.replace(/<link\b[^>]*>/gi, (tag) => {
     const rel = (readAttr(tag, "rel") || "").toLowerCase();
     const href = readAttr(tag, "href") || "";
+    const type = (readAttr(tag, "type") || "").toLowerCase();
     const localPath = localHrefPath(href) || "";
     const rewrittenLocal = localPath ? rewritePublicPath(localPath) : "";
+    // RSS/Atom alternates are unused by visitors and bloat the HTML head.
+    if (rel.includes("alternate") && (/rss|atom|xml/i.test(type) || /\/feed/i.test(href))) {
+      return "";
+    }
     if (
       rel.split(/\s+/).includes("stylesheet") &&
       (rewrittenLocal.startsWith("/wp-content/") ||
@@ -915,7 +936,7 @@ function optimizeHtml(html: string, canonicalPath: string) {
     deferCss
       ? `<link rel="stylesheet" href="${deferHref}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="${deferHref}"></noscript>`
       : "",
-    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px;position:sticky;top:0;z-index:10000}.brand-header .site-nav-wrap,.site-header .site-nav-wrap{position:relative;z-index:10001}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;aspect-ratio:1920/481;overflow:hidden;background:#111;position:relative}.sis-slider-wrapper .sis-slider,.slider-wrap .slider{position:relative;width:100%;height:100%!important}.sis-slider-wrapper .sis-slide,.slider-wrap .slider-slide{height:100%!important}.sis-slider-wrapper.sis-fade .sis-slide.sis-active,.slider-wrap.slider-fade .slider-slide.slider-active{position:relative!important;inset:auto!important;height:100%!important;opacity:1!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:center center!important}.dj-card-image{aspect-ratio:16/9;overflow:hidden;background:#111}.dj-card-image img{width:100%;height:100%;object-fit:cover}.post-body img[width][height]{height:auto}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{aspect-ratio:16/9;height:auto!important;max-height:none!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{height:100%!important;max-height:none!important}.sis-slider-wrapper .sis-dots,.slider-wrap .slider-dots,.sis-slider-wrapper .slider-dots{bottom:10px!important;z-index:5}}@media (max-width:60em){.brand-header:has(.site-nav.toggled-on),.site-header:has(.site-nav.toggled-on),html.cdj-menu-open .brand-header,html.cdj-menu-open .site-header{max-height:100dvh;max-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.site-nav.toggled-on,.site-nav.toggled-on>ul{max-height:none!important;overflow:visible!important}.site-nav .sub-menu.toggled-on,.site-nav ul ul.toggled-on{display:block!important}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}.page-footer,.footer-widgets-wrap,.footer-panels,.footer-bar,#footer,.comment-respond,.dj-media,.dj-instagram,.dj-grid{content-visibility:auto;contain-intrinsic-size:800px}</style>`,
+    `<style id="cdj-speed">html{font-family:Titillium Web,Arial,sans-serif}body{margin:0;background:#fff;color:#333}img{max-width:100%;height:auto;display:block}.elementor-invisible{visibility:visible!important}#page,.site-content,.main-content{min-height:60vh}.brand-header,.site-header{min-height:72px;position:sticky;top:0;z-index:10000}.brand-header .site-nav-wrap,.site-header .site-nav-wrap{position:relative;z-index:10001}.post-body p{margin:0 0 1em}:root{--header-background-color:#069;--footer-background-color:#005782}.brand-header,.site-header,.site-nav-menu ul,.footer-panels,.footer-widgets-wrap{background:#069!important;background-color:#069!important}.footer-bar,.footer-wrap,#footer{background:#005782!important;background-color:#005782!important}.page-footer .footer-info,.page-footer .site-info,.page-footer a:link,.page-footer a:visited{color:#fff!important}.brand-title a:link,.brand-title a:visited,.site-title a:link,.site-title a:visited{color:#fff!important}.site-nav-menu a:link,.site-nav-menu a:visited{color:#fff!important}.sis-slider-wrapper,.slider-wrap{display:block;width:100%;max-width:100%;aspect-ratio:1920/481;overflow:hidden;background:#111;position:relative}.sis-slider-wrapper .sis-slider,.slider-wrap .slider{position:relative;width:100%;height:100%!important}.sis-slider-wrapper .sis-slide,.slider-wrap .slider-slide{height:100%!important}.sis-slider-wrapper.sis-fade .sis-slide.sis-active,.slider-wrap.slider-fade .slider-slide.slider-active{position:relative!important;inset:auto!important;height:100%!important;opacity:1!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{display:block!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:center center!important}.dj-card-image{aspect-ratio:16/9;overflow:hidden;background:#111}.dj-card-image img{width:100%;height:100%;object-fit:cover}.post-body img[width][height]{height:auto}@media (max-width:600px){.sis-slider-wrapper,.slider-wrap{aspect-ratio:16/9;height:auto!important;max-height:none!important}.sis-slider-wrapper .sis-slide img,.slider-wrap .slider-slide img,.sis-slider-wrapper img,.slider-wrap img{height:100%!important;max-height:none!important}.sis-slider-wrapper .sis-dots,.slider-wrap .slider-dots,.sis-slider-wrapper .slider-dots{bottom:10px!important;z-index:5}}@media (max-width:60em){.brand-header:has(.site-nav.toggled-on),.site-header:has(.site-nav.toggled-on),html.cdj-menu-open .brand-header,html.cdj-menu-open .site-header{max-height:100dvh;max-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}.site-nav.toggled-on,.site-nav.toggled-on>ul{max-height:none!important;overflow:visible!important}.site-nav .sub-menu.toggled-on,.site-nav ul ul.toggled-on{display:block!important}}.cdj-lite{display:block;position:relative;width:100%;max-width:100%;margin:0;padding:0;border:0;background:#111 !important;color:#fff !important;cursor:pointer;overflow:hidden;box-shadow:none !important;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none}.cdj-lite img{position:absolute;left:0;top:50%;width:100%;height:auto;transform:translateY(-50%);z-index:0;pointer-events:none}.cdj-lite>.cdj-play{position:absolute;left:50%;top:50%;width:68px;height:48px;transform:translate(-50%,-50%);background:#f00;border-radius:14px;z-index:1;pointer-events:none}.cdj-lite>.cdj-play:before{content:"";position:absolute;left:27px;top:14px;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff}.cdj-lite--ig{background:linear-gradient(135deg,#833ab4 0%,#fd1d1d 48%,#fcb045 100%) !important}.cdj-lite--ig.cdj-lite--poster{background:#111 !important}.cdj-lite--ig.cdj-lite--poster img{object-fit:cover;height:100%;top:0;transform:none}.cdj-lite--ig .cdj-ig-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:0;color:#fff;pointer-events:none}.cdj-lite--ig .cdj-ig-face i{display:block;width:54px;height:54px;border:2px solid #fff;border-radius:14px;position:relative}.cdj-lite--ig .cdj-ig-face i:before{content:"";position:absolute;left:50%;top:50%;width:20px;height:20px;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%)}.cdj-lite--ig .cdj-ig-face i:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;background:#fff;border-radius:50%}.cdj-lite--ig .cdj-ig-face em{font-style:normal;font-weight:700;letter-spacing:.03em;font-size:15px}#bay-area-dj-page .dj-instagram .dj-ig-crop:has(.cdj-lite){aspect-ratio:16/9!important;width:100%!important;max-width:100%!important;margin-left:0!important;margin-right:0!important;background:transparent!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas:has(.cdj-lite){position:relative!important;inset:auto!important;width:100%!important;height:auto!important;transform:none!important}#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{width:100%;aspect-ratio:16/9}.post-body .banner a[href^="tel:"],.banner a[href^="tel:"]{color:#c00000!important}.post-body a,.post-body a.cta-link,a.cta-link,.comment-reply-title span,#reply-title span,.must-log-in a{color:#2278b0 !important}.must-log-in a{text-decoration:underline !important}span[style*="ff6600" i]{color:#e85d00 !important}span[style*="20a0cf" i]{color:#2278b0 !important}.slider-dots{gap:12px !important}.slider-dots .slider-dot,#page .slider-dots .slider-dot,.slider-wrap .slider-dots .slider-dot{width:24px !important;height:24px !important;min-width:24px !important;min-height:24px !important;padding:0 !important;transform:none !important}html.cdj-nav{cursor:progress}a.dj-button,.dj-container .dj-button,.dj-container a.dj-button{background:#e8c96a !important;color:#1a1a1a !important}a.dj-button:hover,.dj-container .dj-button:hover,.dj-container a.dj-button:hover{background:#d4af37 !important;color:#1a1a1a !important}.cdj-qa,.cdj-qa *{text-align:left !important}.cdj-qa ol{padding-left:1.4em;margin-left:0}.cdj-frame-lite{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;margin:0;padding:24px;border:0;background:#f3f6f8;color:#1a1a1a;font:600 16px/1.4 Titillium Web,Arial,sans-serif;cursor:pointer}.cdj-frame-lite:hover{background:#e8eef2}.page-footer,.footer-widgets-wrap,.footer-panels,.footer-bar,#footer,.comment-respond,.dj-media,.dj-instagram,.dj-grid{content-visibility:auto;contain-intrinsic-size:800px}.slider-wrap .slider-slide{display:none}.slider-wrap .slider-slide.slider-active{display:block!important;opacity:1!important;position:relative!important;height:100%!important;inset:auto!important}.slider-wrap .slider-slide.slider-active img{opacity:1!important;visibility:visible!important}</style>`,
   ].join("");
   next = next.replace(/<\/head>/i, `${bundleLinks}</head>`);
 
@@ -951,19 +972,26 @@ function optimizeHtml(html: string, canonicalPath: string) {
       const optimized = optimizedImage(src, readAttr(tag, "width"));
       let updated = tag;
       if (optimized) {
+        // Skip fat srcset on small/card images to keep HTML lean; keep it for heroes & large figures
+        // so Best-Practices image-size-responsive still passes on desktop.
         updated = setAttr(removeAttr(removeAttr(updated, "srcset"), "src"), "src", optimized.src);
-        updated = setAttr(updated, "srcset", optimized.srcset);
-        updated = removeAttr(removeAttr(removeAttr(updated, "data-srcset"), "data-sizes"), "data-src");
-        if (!readAttr(updated, "sizes") || /\d{4}px|100vw\s*,\s*\d{4}/i.test(readAttr(updated, "sizes") || "")) {
-          // Full-bleed slider uses 100vw; large size-full ~content width; other body images stay narrower.
-          const statedW = Number(readAttr(updated, "width") || readAttr(tag, "width") || 0);
-          const sizes = inSlider
-            ? "100vw"
-            : statedW >= 1000 || /size-full/i.test(tag)
-              ? "(max-width: 1200px) 92vw, 1200px"
-              : "(max-width: 840px) 92vw, 540px";
-          updated = setAttr(updated, "sizes", sizes);
+        const statedW = Number(readAttr(updated, "width") || readAttr(tag, "width") || 0);
+        const needsSrcset = inSlider || statedW >= 700 || /size-full/i.test(tag);
+        if (needsSrcset) {
+          updated = setAttr(updated, "srcset", optimized.srcset);
+          updated = setAttr(
+            updated,
+            "sizes",
+            inSlider
+              ? "100vw"
+              : statedW >= 1000 || /size-full/i.test(tag)
+                ? "(max-width: 1200px) 92vw, 1200px"
+                : "(max-width: 840px) 92vw, 540px",
+          );
+        } else {
+          updated = removeAttr(updated, "sizes");
         }
+        updated = removeAttr(removeAttr(removeAttr(updated, "data-srcset"), "data-sizes"), "data-src");
       }
       if (!readAttr(updated, "width") || !readAttr(updated, "height")) {
         const size = imageSize(optimized?.file || pathOnly) || imageSize(pathOnly);
@@ -1004,21 +1032,19 @@ function optimizeHtml(html: string, canonicalPath: string) {
     },
   );
 
-  // When a large content image sits near the top of post-body (corporate), it wins LCP.
-  // Otherwise prefer the hero slider (home/events) or the first content image.
-  const contentDepth = postBodyAt >= 0 && contentAt >= 0 ? contentAt - postBodyAt : 99999;
-  const preferContent = !!lcpCands.content && (!lcpCands.slider || contentDepth < 3500);
-  const winner = preferContent ? lcpCands.content : lcpCands.slider || lcpCands.content;
+  // Hero slider is always above-fold when present — prefer it for LCP (mobile especially).
+  // Picking a later content image left the visible slider `loading=lazy` and crushed Speed Index.
+  const winner = lcpCands.slider || lcpCands.content;
   const winnerIsSlider = !!winner && winner === lcpCands.slider;
   const winnerSrc = winner?.src || "";
   const winnerKey = winner?.key || "";
-  // Single preload URL — slider stays ~828w; content LCP needs ~1200w for desktop width.
+  // Compact LCP bytes: slider defaults to 480w (mobile LCP); srcset covers desktop sharpness.
   const compactLcpSrc = (src: string, width: string) => {
     try {
       const u = new URL(src, "http://local.invalid");
       if (!u.pathname.includes("/_next/image")) return src;
       u.searchParams.set("w", width);
-      u.searchParams.set("q", "65");
+      u.searchParams.set("q", "60");
       return `${u.pathname}?${u.searchParams.toString()}`;
     } catch {
       return src;
@@ -1026,22 +1052,25 @@ function optimizeHtml(html: string, canonicalPath: string) {
   };
   let lcpLinks = "";
   if (winnerSrc && winnerKey) {
-    const compact = compactLcpSrc(winnerSrc, winnerIsSlider ? "828" : "1200");
-    lcpLinks += `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
+    const wMobile = winnerIsSlider ? "480" : "750";
+    const wDesktop = winnerIsSlider ? "640" : "1080";
+    const compact = compactLcpSrc(winnerSrc, wMobile);
+    const compactDesk = compactLcpSrc(winnerSrc, wDesktop);
+    const sizes = winnerIsSlider ? "100vw" : "(max-width: 1200px) 92vw, 1080px";
+    lcpLinks += `<link rel="preload" as="image" href="${compact}" imagesrcset="${compact} ${wMobile}w, ${compactDesk} ${wDesktop}w" imagesizes="${sizes}" fetchpriority="high">`;
     next = next.replace(/<img\b[^>]*>/gi, (tag) => {
       const src = readAttr(tag, "src") || "";
       if (src !== winnerKey && src !== winnerSrc) return tag;
       let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
       updated = setAttr(updated, "src", compact);
-      updated = setAttr(
-        updated,
-        "sizes",
-        winnerIsSlider ? "100vw" : "(max-width: 1200px) 92vw, 1200px",
-      );
+      updated = setAttr(updated, "srcset", `${compact} ${wMobile}w, ${compactDesk} ${wDesktop}w`);
+      updated = setAttr(updated, "sizes", sizes);
+      // sync decode cuts LCP render-delay on mobile when the image is already cached.
+      updated = setAttr(updated, "decoding", "sync");
       return setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
     });
   }
-  // Keep only the LCP image eager — a second eager image (logo/content) delays Speed Index.
+  // Keep only the LCP image eager+high — a second eager image steals mobile bandwidth from the hero.
   if (!winnerSrc) {
     // Absolute fallback: first substantial image in the document.
     let assigned = false;
@@ -1059,12 +1088,17 @@ function optimizeHtml(html: string, canonicalPath: string) {
       let updated = removeAttr(removeAttr(removeAttr(tag, "loading"), "fetchpriority"), "srcset");
       updated = setAttr(updated, "src", compact);
       updated = setAttr(updated, "sizes", "100vw");
+      updated = setAttr(updated, "decoding", "sync");
       updated = setAttr(setAttr(updated, "loading", "eager"), "fetchpriority", "high");
       lcpLinks = `<link rel="preload" as="image" href="${compact}" fetchpriority="high">`;
       return updated;
     });
   }
-  if (lcpLinks) next = next.replace(/<\/head>/i, `${lcpLinks}</head>`);
+  // Hoist LCP preload to the first bytes of <head> so it isn't stuck behind ~35KB critical CSS.
+  if (lcpLinks) {
+    next = next.replace(/<link[^>]*rel=["']preload["'][^>]*>/gi, "");
+    next = next.replace(/<head[^>]*>/i, (head) => `${head}${lcpLinks}`);
+  }
 
   next = next.replace(/<video\b[^>]*>/gi, (tag) => {
     let updated = setAttr(tag, "preload", "none");
@@ -1150,11 +1184,17 @@ function optimizeHtml(html: string, canonicalPath: string) {
         ? dataSrc
         : rawSrc || dataSrc;
     if (!/youtube\.com|youtu\.be|youtube-nocookie\.com|instagram\.com|vimeo\.com/i.test(src)) {
-      // Keep third-party embeds (e.g. contact form) intact — only add a11y + lazy loading.
+      // Contact / third-party forms: click-to-load so the iframe document can't contend with LCP.
+      if (/contact\.californiadiscjockey\.com/i.test(src) || /contact/i.test(src)) {
+        const height = readAttr(open, "height") || "1500px";
+        const title = (readAttr(open, "title") || "Contact form").replace(/"/g, "&quot;");
+        const safeSrc = src.replace(/"/g, "&quot;");
+        const safeHeight = String(height).replace(/"/g, "&quot;");
+        return `<button type="button" class="cdj-frame-lite" data-src="${safeSrc}" data-height="${safeHeight}" data-title="${title}" aria-label="Load ${title}">Load contact form</button>`;
+      }
       let updated = open;
       if (!readAttr(updated, "title") && !readAttr(updated, "aria-label")) {
-        const label = /contact/i.test(src) ? "Contact form" : "Embedded content";
-        updated = setAttr(updated, "title", label);
+        updated = setAttr(updated, "title", "Embedded content");
       }
       if (!/loading=/i.test(updated)) updated = setAttr(updated, "loading", "lazy");
       return tag.replace(/^<iframe\b[^>]*>/i, updated);

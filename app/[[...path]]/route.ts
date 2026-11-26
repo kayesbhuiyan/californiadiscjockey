@@ -51,7 +51,9 @@ function textResponse(
   if (options?.blockIndexing && contentType.includes("text/html")) {
     headers["x-robots-tag"] = "noindex, nofollow";
   }
-  // Let the host (Vercel / next start) apply gzip/br — manual gzip double-encodes.
+  // Do not manually gzip: Next strips Content-Encoding from Route Handler responses
+  // while leaving a gzip body, so clients/LH parse binary as HTML (a11y/SEO collapse).
+  // Vercel edge compression handles production transfer size.
   return new Response(body, { status, headers });
 }
 
