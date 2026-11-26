@@ -2804,11 +2804,10 @@ which mangles
 </p>
 <style>
 .bay-area-dj{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box;}
-.bay-area-dj .dj-media{display:block!important;clear:both!important;float:none!important;box-sizing:border-box!important;width:100%!important;max-width:none!important;min-width:0!important;margin:28px 0!important;}
-.bay-area-dj .dj-player{display:block!important;position:relative!important;width:100%!important;max-width:none!important;height:0!important;padding:0 0 56.25%!important;box-sizing:content-box!important;overflow:visible!important;}
-/* .bay-area-dj .dj-player.dj-portrait{padding-bottom:177.777778%!important;}
-*/
-.bay-area-dj .dj-player iframe{position:absolute!important;inset:0!important;display:block!important;width:100%!important;max-width:none!important;min-width:0!important;height:100%!important;max-height:none!important;min-height:0!important;aspect-ratio:auto!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;}
+.bay-area-dj .dj-media{display:block!important;clear:both!important;float:none!important;box-sizing:border-box!important;width:100%!important;max-width:none!important;min-width:0!important;height:auto!important;margin:1.25rem 0!important;}
+.bay-area-dj .dj-player{display:block!important;position:relative!important;width:100%!important;max-width:none!important;height:auto!important;padding:0!important;box-sizing:border-box!important;overflow:hidden!important;}
+.bay-area-dj .dj-player iframe,.bay-area-dj .dj-player video,.bay-area-dj .dj-player .cdj-lite,.bay-area-dj .dj-instagram .cdj-lite,.bay-area-dj .dj-instagram video{position:relative!important;inset:auto!important;display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;max-height:none!important;min-height:0!important;aspect-ratio:16/9!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;}
+.bay-area-dj .dj-player.dj-portrait iframe,.bay-area-dj .dj-player.dj-portrait video,.bay-area-dj .dj-player.dj-portrait .cdj-lite{aspect-ratio:16/9!important;max-width:100%!important;margin:0!important;}
 .bay-area-dj .dj-instagram{background:#fff!important;color:#111!important;color-scheme:light!important;}
 .bay-area-dj .dj-media-link{display:block;margin:12px 0 0;font-size:15px;line-height:1.5;}
 .bay-area-dj img{max-width:100%;height:auto;}
@@ -2843,12 +2842,11 @@ body{overflow-x:clip!important;overflow-y:visible!important;height:auto!importan
 body:has(#bay-area-dj-page) :is(#page,#content,#primary,.site,.site-content,.content-area,.site-main,main,article,.entry-content,.elementor,.e-con,.e-con-inner,.elementor-widget,.elementor-widget-container){overflow-y:visible!important;max-height:none!important;}
 body:has(#bay-area-dj-page) #bay-area-dj-page{overflow-y:visible!important;max-height:none!important;}
 
-/* Instagram reels: full-bleed, cropped */
+/* Instagram reels: full-width 16:9 click-to-play */
 #bay-area-dj-page .dj-instagram{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;margin-inline:0!important;padding:0!important;float:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;}
-#bay-area-dj-page .dj-instagram .dj-ig-crop{display:block!important;position:relative!important;width:100vw!important;max-width:100vw!important;min-width:0!important;box-sizing:border-box!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;padding:0!important;float:none!important;height:auto!important;aspect-ratio:379.6875/213.75!important;overflow:hidden!important;background:#fff!important;color-scheme:light!important;border:0!important;border-radius:0!important;box-shadow:none!important;}
-#bay-area-dj-page .dj-instagram .dj-ig-canvas{position:absolute!important;inset:0 auto auto 0!important;display:block!important;width:540px!important;max-width:none!important;height:1000px!important;margin:0!important;padding:0!important;transform-origin:0 0!important;transform:scale(tan(atan2(100vw,379.6875px))) translate(-80.15625px,-284.625px)!important;}
-#bay-area-dj-page .dj-instagram .dj-ig-canvas iframe{display:block!important;position:static!important;width:540px!important;max-width:none!important;height:1000px!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;}
-#bay-area-dj-page #dj-ig-party{aspect-ratio:4/5!important;}
+#bay-area-dj-page .dj-instagram .dj-ig-crop{display:block!important;position:relative!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important;padding:0!important;float:none!important;height:auto!important;aspect-ratio:16/9!important;overflow:hidden!important;background:#111!important;color-scheme:light!important;border:0!important;border-radius:0!important;box-shadow:none!important;}
+#bay-area-dj-page .dj-instagram .dj-ig-canvas{position:relative!important;inset:auto!important;display:block!important;width:100%!important;max-width:100%!important;height:auto!important;margin:0!important;padding:0!important;transform:none!important;}
+#bay-area-dj-page .dj-instagram .dj-ig-canvas iframe,#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{display:block!important;position:relative!important;width:100%!important;max-width:100%!important;height:auto!important;aspect-ratio:16/9!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;}
 #bay-area-dj-page #dj-ig-party .dj-ig-canvas{transform:scale(tan(atan2(100vw,540px))) translateY(-54px)!important;}
 
 .dj-heading{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;font-weight:700!important;overflow-wrap:break-word;}
@@ -2970,7 +2968,7 @@ Ensure to ask about our packages!
 </div>
 We ensure to give our clients 100% satisfaction at every event.
 
-<a href="../../hindi/index.html"><strong>CLICK HERE FOR INDIAN SONGLIST</strong></a>
+<a href="../../hindi/"><strong>CLICK HERE FOR INDIAN SONGLIST</strong></a>
 <h5 class="dj-heading">Bay Area DJ Specializing in All Occasions:</h5>
 Corporate DJ • Baby Shower DJ • Birthday DJs • Class Reunions • Sweet Sixteens
 Baby Showers • Corporate Events • Graduations • Holiday Events • Theme Parties • Fashion Shows
@@ -2990,7 +2988,7 @@ Celebrate weddings, birthdays, baby showers, and special occasions
     for Dhoom events, Baraat processions, Mehndi and Sangeet celebrations,
     Raas and Garba nights, and Sari ceremonies throughout San Francisco
     and the Bay Area, California.
-<h3>Multicultural Wedding &amp; Event DJ Services</h3>
+<h4>Multicultural Wedding &amp; Event DJ Services</h4>
 Music tailored to your traditions, culture, and celebration.
     Our multicultural DJ services welcome Indian, Persian, Arabic,
     Muslim, Sikh, Armenian, Russian, Romanian, Iraqi, Iranian,
@@ -3014,9 +3012,9 @@ Music tailored to your traditions, culture, and celebration.
 
 </div>
 &nbsp;
-<h4 class="dj-heading">NAMASTE — Indian Bhangra Punjabi Music Bollywood</h4>
+<h5 class="dj-heading">NAMASTE — Indian Bhangra Punjabi Music Bollywood</h5>
 &nbsp;
-<h4 class="dj-heading">Here is a Partial List of Artists:</h4>
+<h5 class="dj-heading">Here is a Partial List of Artists:</h5>
 &nbsp;
 <div class="dj-media">
 
@@ -3029,7 +3027,7 @@ Music tailored to your traditions, culture, and celebration.
 <div>
 
 &nbsp;
-<h4 class="dj-heading">Bay Area Bollywood &amp; Desi Wedding DJs</h4>
+<h5 class="dj-heading">Bay Area Bollywood &amp; Desi Wedding DJs</h5>
 &nbsp;
 
 Celebrate your wedding with professional Indian DJ and MC services, featuring Bollywood and Desi music tailored to your celebration.
@@ -3040,7 +3038,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 
 &nbsp;
 <h3 class="dj-heading">DJ for Miss Bharat California — Milpitas 5/28/2024</h3>
-<img fetchpriority="high" decoding="async" class="alignnone size-full wp-image-8059" src="../../wp-content/uploads/2024/04/ea770239-225d-47ff-ac9f-2d20384bf48d.jpg" alt="DJ for Miss Bharat California, Milpitas" width="800" height="533" /> <img decoding="async" class="alignnone size-full wp-image-8060" src="../../wp-content/uploads/2024/04/a5062a79-9690-4e7a-8e92-c9b7ccbf14e8.jpg" alt="Miss Bharat California event, Milpitas" width="533" height="800" /> <!-- Instagram: wedding -->
+<img fetchpriority="high" fetchpriority="high" decoding="async" class="alignnone size-full wp-image-8059" src="../../wp-content/uploads/2024/04/ea770239-225d-47ff-ac9f-2d20384bf48d.jpeg" alt="DJ for Miss Bharat California, Milpitas" width="800" height="533" /> <img decoding="async" class="alignnone size-full wp-image-8060" src="../../wp-content/uploads/2024/04/a5062a79-9690-4e7a-8e92-c9b7ccbf14e8.jpeg" alt="Miss Bharat California event, Milpitas" width="533" height="800" /> <!-- Instagram: wedding -->
 <div class="dj-media dj-instagram fitvidsignore">
 
 &nbsp;
@@ -3083,63 +3081,11 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 &nbsp;
 
 </div>
-<!-- ================= Q &amp; A ================= --> <script>
-(function () {
-  function screenWidth() {
-    return document.documentElement.clientWidth || window.innerWidth;
-  }
-  function fitInstagram() {
-    var width = screenWidth();
-    var crops = document.querySelectorAll("#bay-area-dj-page .dj-ig-crop");
-    for (var i = 0; i < crops.length; i++) {
-      var crop = crops[i];
-      var canvas = crop.querySelector(".dj-ig-canvas");
-      if (!canvas) continue;
-      // Click-to-play placeholders must stay unscaled; the old crop math is for iframes only.
-      if (crop.querySelector(".cdj-lite")) {
-        crop.style.setProperty("width", "100%", "important");
-        crop.style.setProperty("max-width", "100%", "important");
-        crop.style.setProperty("margin-left", "0px", "important");
-        crop.style.setProperty("margin-right", "0px", "important");
-        crop.style.setProperty("aspect-ratio", "16 / 9", "important");
-        crop.style.setProperty("height", "auto", "important");
-        canvas.style.setProperty("position", "relative", "important");
-        canvas.style.setProperty("inset", "auto", "important");
-        canvas.style.setProperty("width", "100%", "important");
-        canvas.style.setProperty("height", "auto", "important");
-        canvas.style.setProperty("transform", "none", "important");
-        canvas.style.setProperty("transform-origin", "initial", "important");
-        continue;
-      }
-      crop.style.setProperty("width", width + "px", "important");
-      crop.style.setProperty("max-width", width + "px", "important");
-      crop.style.setProperty("margin-right", "0px", "important");
-      crop.style.setProperty("margin-left", "0px", "important");
-      var left = crop.getBoundingClientRect().left;
-      crop.style.setProperty("margin-left", (-left) + "px", "important");
-      var leftAgain = crop.getBoundingClientRect().left;
-      if (Math.abs(leftAgain) > 0.5) {
-        crop.style.setProperty("margin-left", ((-left) - leftAgain) + "px", "important");
-      }
-      var base = crop.id === "dj-ig-party" ? 540 : 379.6875;
-      var shift = crop.id === "dj-ig-party" ? "translateY(-54px)" : "translate(-80.15625px, -284.625px)";
-      canvas.style.setProperty("transform-origin", "0 0", "important");
-      canvas.style.setProperty("transform", "scale(" + (width / base) + ") " + shift, "important");
-    }
-  }
-  window.cdjFitInstagram = fitInstagram;
-  fitInstagram();
-  window.addEventListener("resize", fitInstagram);
-  window.addEventListener("orientationchange", fitInstagram);
-  window.addEventListener("load", fitInstagram);
-  setTimeout(fitInstagram, 300);
-  setTimeout(fitInstagram, 1200);
-})();
-</script>								</div>
+<!-- ================= Q &amp; A ================= --> <script data-two_delay_src='inline' data-two_delay_id="two_6b081cfce3637"></script>								</div>
 				<div class="elementor-element elementor-element-a3fa477 elementor-widget elementor-widget-image" data-id="a3fa477" data-element_type="widget" data-e-type="widget" data-widget_type="image.default">
-															<img decoding="async" width="840" height="280" src="../../wp-content/uploads/2026/11/image-1024x341.webp" class="attachment-large size-large wp-image-10503" alt="" srcset="https://californiadiscjockey.com/wp-content/uploads/2026/11/image-1024x341.webp 1024w, https://californiadiscjockey.com/wp-content/uploads/2026/11/image-300x100.webp 300w, https://californiadiscjockey.com/wp-content/uploads/2026/11/image-768x256.webp 768w, https://californiadiscjockey.com/wp-content/uploads/2026/11/image-1536x512.webp 1536w, https://californiadiscjockey.com/wp-content/uploads/2026/11/image-2048x683.webp 2048w, https://californiadiscjockey.com/wp-content/uploads/2026/11/image-600x200.webp 600w" sizes="(max-width: 840px) 100vw, 840px" />															</div>
+															<noscript><img decoding="async" width="840" height="280" src="../../wp-content/uploads/2026/11/image-1024x341.webp" class="attachment-large size-large wp-image-10503" alt="" srcset="../../wp-content/uploads/2026/11/image-1024x341.webp 1024w, ../../wp-content/uploads/2026/11/image-300x100.webp 300w, ../../wp-content/uploads/2026/11/image-768x256.webp 768w, ../../wp-content/uploads/2026/11/image-1536x512.webp 1536w, ../../wp-content/uploads/2026/11/image-2048x683.webp 2048w, ../../wp-content/uploads/2026/11/image-600x200.webp 600w" sizes="(max-width: 840px) 100vw, 840px" /></noscript><img decoding="async" width="840" height="280" src='data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20840%20280%22%3E%3C/svg%3E' data-src="../../wp-content/uploads/2026/11/image-1024x341.webp" class=" lazy  attachment-large size-large wp-image-10503" alt=""  data-srcset="../../wp-content/uploads/2026/11/image-1024x341.webp 1024w, ../../wp-content/uploads/2026/11/image-300x100.webp 300w, ../../wp-content/uploads/2026/11/image-768x256.webp 768w, ../../wp-content/uploads/2026/11/image-1536x512.webp 1536w, ../../wp-content/uploads/2026/11/image-2048x683.webp 2048w, ../../wp-content/uploads/2026/11/image-600x200.webp 600w"  data-sizes="(max-width: 840px) 100vw, 840px" />															</div>
 				<div class="elementor-element elementor-element-1834ee4 elementor-widget elementor-widget-text-editor" data-id="1834ee4" data-element_type="widget" data-e-type="widget" data-widget_type="text-editor.default">
-									<section class="cdj-qa"><h2>Q &amp; A</h2><h3>What Are Some of the Best Indian &amp; Punjabi Dance Songs?</h3><h4>Top 20 Bollywood Dance Tracks &amp; Lead Artists</h4><ol><li>Sher Khul Gaye – Vishal &amp; Shekhar, Benny Dayal, Shilpa Rao</li><li>Besharam Rang – Shilpa Rao, Caralisa Monteiro, Vishal &amp; Shekhar</li><li>Param Sundari – Shreya Ghoshal, A.R. Rahman</li><li>Badtameez Dil – Benny Dayal, Pritam</li><li>Ghungroo – Arijit Singh, Shilpa Rao, Vishal-Shekhar</li><li>Balam Pichkari – Vishal Dadlani, Shalmali Kholgade, Pritam</li><li>Gallan Goodiyaan – Yashita Yashpal Sharma, Manish Kumar Tipu, Farhan Akhtar</li><li>London Thumakda – Neha Kakkar, Sonu Kakkar, Labh Janjua</li><li>Kala Chashma – Badshah, Neha Kakkar, Amar Arshi</li><li>Aankh Marey – Neha Kakkar, Mika Singh, Kumar Sanu</li><li>Tamma Tamma Again – Badshah, Anuradha Paudwal, Bappi Lahiri</li><li>Kar Gayi Chull – Badshah, Fazilpuria, Neha Kakkar, Amaal Mallik</li><li>Bom Diggy Diggy – Zack Knight, Jasmin Walia</li><li>Nashe Si Chadh Gayi – Arijit Singh</li><li>Dilbar – Neha Kakkar, Dhvani Bhanushali, Ikka</li><li>Chogada – Darshan Raval, Asees Kaur</li><li>Abhi Toh Party Shuru Hui Hai – Badshah, Aastha Gill</li><li>Kamariya – Aastha Gill, Divya Kumar</li><li>What Jhumka? – Arijit Singh, Jonita Gandhi</li><li>Genda Phool – Badshah, Payal Dev</li></ol><h4>20 Punjabi Dance Tracks for US Events</h4><h5>Ultimate Dance Floor Anthems</h5><ol><li>Brown Munde – AP Dhillon, Gurinder Gill, Shinda Kahlon</li><li>Lover – Diljit Dosanjh</li><li>Tauba Tauba – Karan Aujla</li><li>High Rated Gabru – Guru Randhawa</li><li>Mundian To Bach Ke – Panjabi MC</li></ol><h5>Modern Urban &amp; Trap Hits</h5><ol start="6"><li>Excuses – AP Dhillon, Intense, Gurinder Gill</li><li>Softly – Karan Aujla</li><li>Born to Shine – Diljit Dosanjh</li><li>Elevated – Shubh</li><li>White Brown Black – Avvy Sra, Karan Aujla</li></ol><h5>High-Energy Bhangra &amp; Club Beats</h5><ol start="11"><li>Proper Patola – Diljit Dosanjh, Badshah</li><li>Na Ja – Pav Dharia</li><li>Illegal Weapon 2.0 – Jasmine Sandlas, Garry Sandhu</li><li>Coka – Sukh-E Muzical Doctorz</li><li>Satisfya – Imran Khan</li></ol><h5>Heavy Bass &amp; Party Classics</h5><ol start="16"><li>Angreji Beat – Yo Yo Honey Singh, Gippy Grewal</li><li>8 Asla – Sukha, Gurlez Akhtar</li><li>Same Beef – Bohemia, Sidhu Moose Wala</li><li>Sauda Khara Khara – Diljit Dosanjh, Sukhbir</li><li>Wakhra Swag – Navv Inder, Badshah</li></ol><h4>More Bollywood &amp; Bhangra Party Favorites</h4><ol><li>Tauba Tauba – Bad Newz</li><li>Morni Banke – Badhaai Ho</li><li>London Thumakda – Queen</li><li>Dhoom Machale – Sunidhi Chauhan</li><li>Subah Hone Na De – Desi Boyz</li><li>Mauja Hi Mauja – Jab We Met</li><li>Oh Ho Ho Ho (Remix) – Sukhbir, Ikka</li><li>Sauda Khara Khara – Good Newwz</li><li>Radha – Student of the Year</li><li>Munni Badnam Hui – Dabangg</li><li>Gur Nalon Ishq Mitha – Bally Sagoo feat. Malkit Singh (start at 11 seconds)</li><li>1 2 3 4 Get On the Dance Floor – Chennai Express</li><li>Ghunghat Bain – Ajay Hooda, Ruchika Jangid, Surender Romio</li><li>Beware – Panjabi MC feat. Jay-Z</li><li>Abhi Toh Party Shuru Hui Hai – Khoobsurat</li><li>Twist – Love Aaj Kal</li><li>Nagada Nagada – Jab We Met</li><li>Where’s the Party Tonight – Kabhi Alvida Na Kehna</li><li>Gal Ban Gayee – Sukhbir</li><li>Lungi Dance – Chennai Express</li><li>Lat Lag Gayee – Race 2</li><li>Kajra Re – Bunty aur Babli</li><li>It’s the Time to Disco – KK, Shaan, Vasundhara Das, Loy Mendonsa</li><li>Gallan Goodiyaan – Dil Dhadakne Do – Yashita Sharma, Manish Kumar Tipu, Farhan Akhtar, Shankar Mahadevan, Sukhwinder Singh</li><li>Desi Girl – Shankar Mahadevan, Sunidhi Chauhan, Vishal Dadlani</li><li>Desi Boyz (Make Some Noise) – KK, Bob</li></ol></section>								</div>
+									<section><h2>Q &amp; A</h2><h3>What Are Some of the Best Indian &amp; Punjabi Dance Songs?</h3><h4>Top 20 Bollywood Dance Tracks &amp; Lead Artists</h4><ol><li>Sher Khul Gaye – Vishal &amp; Shekhar, Benny Dayal, Shilpa Rao</li><li>Besharam Rang – Shilpa Rao, Caralisa Monteiro, Vishal &amp; Shekhar</li><li>Param Sundari – Shreya Ghoshal, A.R. Rahman</li><li>Badtameez Dil – Benny Dayal, Pritam</li><li>Ghungroo – Arijit Singh, Shilpa Rao, Vishal-Shekhar</li><li>Balam Pichkari – Vishal Dadlani, Shalmali Kholgade, Pritam</li><li>Gallan Goodiyaan – Yashita Yashpal Sharma, Manish Kumar Tipu, Farhan Akhtar</li><li>London Thumakda – Neha Kakkar, Sonu Kakkar, Labh Janjua</li><li>Kala Chashma – Badshah, Neha Kakkar, Amar Arshi</li><li>Aankh Marey – Neha Kakkar, Mika Singh, Kumar Sanu</li><li>Tamma Tamma Again – Badshah, Anuradha Paudwal, Bappi Lahiri</li><li>Kar Gayi Chull – Badshah, Fazilpuria, Neha Kakkar, Amaal Mallik</li><li>Bom Diggy Diggy – Zack Knight, Jasmin Walia</li><li>Nashe Si Chadh Gayi – Arijit Singh</li><li>Dilbar – Neha Kakkar, Dhvani Bhanushali, Ikka</li><li>Chogada – Darshan Raval, Asees Kaur</li><li>Abhi Toh Party Shuru Hui Hai – Badshah, Aastha Gill</li><li>Kamariya – Aastha Gill, Divya Kumar</li><li>What Jhumka? – Arijit Singh, Jonita Gandhi</li><li>Genda Phool – Badshah, Payal Dev</li></ol><h4>20 Punjabi Dance Tracks for US Events</h4><h5>Ultimate Dance Floor Anthems</h5><ol><li>Brown Munde – AP Dhillon, Gurinder Gill, Shinda Kahlon</li><li>Lover – Diljit Dosanjh</li><li>Tauba Tauba – Karan Aujla</li><li>High Rated Gabru – Guru Randhawa</li><li>Mundian To Bach Ke – Panjabi MC</li></ol><h5>Modern Urban &amp; Trap Hits</h5><ol start="6"><li>Excuses – AP Dhillon, Intense, Gurinder Gill</li><li>Softly – Karan Aujla</li><li>Born to Shine – Diljit Dosanjh</li><li>Elevated – Shubh</li><li>White Brown Black – Avvy Sra, Karan Aujla</li></ol><h5>High-Energy Bhangra &amp; Club Beats</h5><ol start="11"><li>Proper Patola – Diljit Dosanjh, Badshah</li><li>Na Ja – Pav Dharia</li><li>Illegal Weapon 2.0 – Jasmine Sandlas, Garry Sandhu</li><li>Coka – Sukh-E Muzical Doctorz</li><li>Satisfya – Imran Khan</li></ol><h5>Heavy Bass &amp; Party Classics</h5><ol start="16"><li>Angreji Beat – Yo Yo Honey Singh, Gippy Grewal</li><li>8 Asla – Sukha, Gurlez Akhtar</li><li>Same Beef – Bohemia, Sidhu Moose Wala</li><li>Sauda Khara Khara – Diljit Dosanjh, Sukhbir</li><li>Wakhra Swag – Navv Inder, Badshah</li></ol><h4>More Bollywood &amp; Bhangra Party Favorites</h4><ol><li>Tauba Tauba – Bad Newz</li><li>Morni Banke – Badhaai Ho</li><li>London Thumakda – Queen</li><li>Dhoom Machale – Sunidhi Chauhan</li><li>Subah Hone Na De – Desi Boyz</li><li>Mauja Hi Mauja – Jab We Met</li><li>Oh Ho Ho Ho (Remix) – Sukhbir, Ikka</li><li>Sauda Khara Khara – Good Newwz</li><li>Radha – Student of the Year</li><li>Munni Badnam Hui – Dabangg</li><li>Gur Nalon Ishq Mitha – Bally Sagoo feat. Malkit Singh (start at 11 seconds)</li><li>1 2 3 4 Get On the Dance Floor – Chennai Express</li><li>Ghunghat Bain – Ajay Hooda, Ruchika Jangid, Surender Romio</li><li>Beware – Panjabi MC feat. Jay-Z</li><li>Abhi Toh Party Shuru Hui Hai – Khoobsurat</li><li>Twist – Love Aaj Kal</li><li>Nagada Nagada – Jab We Met</li><li>Where’s the Party Tonight – Kabhi Alvida Na Kehna</li><li>Gal Ban Gayee – Sukhbir</li><li>Lungi Dance – Chennai Express</li><li>Lat Lag Gayee – Race 2</li><li>Kajra Re – Bunty aur Babli</li><li>It’s the Time to Disco – KK, Shaan, Vasundhara Das, Loy Mendonsa</li><li>Gallan Goodiyaan – Dil Dhadakne Do – Yashita Sharma, Manish Kumar Tipu, Farhan Akhtar, Shankar Mahadevan, Sukhwinder Singh</li><li>Desi Girl – Shankar Mahadevan, Sunidhi Chauhan, Vishal Dadlani</li><li>Desi Boyz (Make Some Noise) – KK, Bob</li></ol></section>								</div>
 					</div>
 				</div>
 		<div class="elementor-element elementor-element-a561d19 e-grid e-con-boxed e-con e-parent" data-id="a561d19" data-element_type="container" data-e-type="container">
@@ -3150,7 +3096,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 									<div dir="ltr">Gurdeep Hira Dholi Player </div><div>With DJ Jivan @ Amazon </div>								</div>
 				<div class="elementor-element elementor-element-db1591c elementor-widget elementor-widget-image" data-id="db1591c" data-element_type="widget" data-e-type="widget" data-widget_type="image.default">
 												<figure class="wp-caption">
-										<img loading="lazy" decoding="async" width="840" height="630" src="../../wp-content/uploads/2026/11/IMG_8289-1024x768.jpg" class="attachment-large size-large wp-image-10239" alt="" srcset="https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-1024x768.jpeg 1024w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-300x225.jpeg 300w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-768x576.jpeg 768w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-1536x1152.jpeg 1536w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-2048x1536.jpeg 2048w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8289-600x450.jpeg 600w" sizes="(max-width: 840px) 100vw, 840px" />											<figcaption class="widget-image-caption wp-caption-text"></figcaption>
+										<noscript><img loading="lazy" loading="lazy" decoding="async" width="840" height="630" src="../../wp-content/uploads/2026/11/IMG_8289-1024x768.jpeg" class="attachment-large size-large wp-image-10239" alt="" srcset="../../wp-content/uploads/2026/11/IMG_8289-1024x768.jpeg 1024w, ../../wp-content/uploads/2026/11/IMG_8289-300x225.jpeg 300w, ../../wp-content/uploads/2026/11/IMG_8289-768x576.jpeg 768w, ../../wp-content/uploads/2026/11/IMG_8289-1536x1152.jpeg 1536w, ../../wp-content/uploads/2026/11/IMG_8289-2048x1536.jpeg 2048w, ../../wp-content/uploads/2026/11/IMG_8289-600x450.jpeg 600w" sizes="auto, (max-width: 840px) 100vw, 840px" /></noscript><img loading="lazy" loading="lazy" decoding="async" width="840" height="630" src='data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20840%20630%22%3E%3C/svg%3E' data-src="../../wp-content/uploads/2026/11/IMG_8289-1024x768.jpeg" class=" lazy  attachment-large size-large wp-image-10239" alt=""  data-srcset="../../wp-content/uploads/2026/11/IMG_8289-1024x768.jpeg 1024w, ../../wp-content/uploads/2026/11/IMG_8289-300x225.jpeg 300w, ../../wp-content/uploads/2026/11/IMG_8289-768x576.jpeg 768w, ../../wp-content/uploads/2026/11/IMG_8289-1536x1152.jpeg 1536w, ../../wp-content/uploads/2026/11/IMG_8289-2048x1536.jpeg 2048w, ../../wp-content/uploads/2026/11/IMG_8289-600x450.jpeg 600w"  data-sizes="auto, (max-width: 840px) 100vw, 840px" />											<figcaption class="widget-image-caption wp-caption-text"></figcaption>
 										</figure>
 									</div>
 					</div>
@@ -3161,7 +3107,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 					<h2 class="elementor-heading-title elementor-size-default">DJ Jivan at Amazon Diwali Party with Gurdeep Hira Dholi Player 2026 
 </h2>				</div>
 				<div class="elementor-element elementor-element-dedd6ee elementor-widget elementor-widget-image" data-id="dedd6ee" data-element_type="widget" data-e-type="widget" data-widget_type="image.default">
-															<img loading="lazy" decoding="async" width="768" height="1024" src="../../wp-content/uploads/2026/11/IMG_8284-768x1024.webp" class="attachment-large size-large wp-image-10237" alt="" srcset="https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-768x1024.webp 768w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-225x300.webp 225w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-1152x1536.webp 1152w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-1536x2048.webp 1536w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-450x600.webp 450w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8284-scaled.webp 1920w" sizes="(max-width: 768px) 100vw, 768px" />															</div>
+															<noscript><img loading="lazy" loading="lazy" decoding="async" width="768" height="1024" src="../../wp-content/uploads/2026/11/IMG_8284-768x1024.webp" class="attachment-large size-large wp-image-10237" alt="" srcset="../../wp-content/uploads/2026/11/IMG_8284-768x1024.webp 768w, ../../wp-content/uploads/2026/11/IMG_8284-225x300.webp 225w, ../../wp-content/uploads/2026/11/IMG_8284-1152x1536.webp 1152w, ../../wp-content/uploads/2026/11/IMG_8284-1536x2048.webp 1536w, ../../wp-content/uploads/2026/11/IMG_8284-450x600.webp 450w, ../../wp-content/uploads/2026/11/IMG_8284-scaled.webp 1920w" sizes="auto, (max-width: 768px) 100vw, 768px" /></noscript><img loading="lazy" loading="lazy" decoding="async" width="768" height="1024" src='data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20768%201024%22%3E%3C/svg%3E' data-src="../../wp-content/uploads/2026/11/IMG_8284-768x1024.webp" class=" lazy  attachment-large size-large wp-image-10237" alt=""  data-srcset="../../wp-content/uploads/2026/11/IMG_8284-768x1024.webp 768w, ../../wp-content/uploads/2026/11/IMG_8284-225x300.webp 225w, ../../wp-content/uploads/2026/11/IMG_8284-1152x1536.webp 1152w, ../../wp-content/uploads/2026/11/IMG_8284-1536x2048.webp 1536w, ../../wp-content/uploads/2026/11/IMG_8284-450x600.webp 450w, ../../wp-content/uploads/2026/11/IMG_8284-scaled.webp 1920w"  data-sizes="auto, (max-width: 768px) 100vw, 768px" />															</div>
 					</div>
 				</div>
 		<div class="elementor-element elementor-element-11a0b7b e-flex e-con-boxed e-con e-parent" data-id="11a0b7b" data-element_type="container" data-e-type="container">
@@ -3169,7 +3115,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 				<div class="elementor-element elementor-element-48d8ef9 elementor-widget elementor-widget-heading" data-id="48d8ef9" data-element_type="widget" data-e-type="widget" data-widget_type="heading.default">
 					<h2 class="elementor-heading-title elementor-size-default">Bay Area Indian DJ at Amazon Diwali Party in Palo Alto 2026</h2>				</div>
 				<div class="elementor-element elementor-element-216e105 elementor-widget elementor-widget-image" data-id="216e105" data-element_type="widget" data-e-type="widget" data-widget_type="image.default">
-															<img loading="lazy" decoding="async" width="768" height="1024" src="../../wp-content/uploads/2026/11/IMG_8281-768x1024.webp" class="attachment-large size-large wp-image-10236" alt="" srcset="https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-768x1024.webp 768w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-225x300.webp 225w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-1152x1536.webp 1152w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-1536x2048.webp 1536w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-450x600.webp 450w, https://californiadiscjockey.com/wp-content/uploads/2026/11/IMG_8281-scaled.webp 1920w" sizes="(max-width: 768px) 100vw, 768px" />															</div>
+															<noscript><img loading="lazy" loading="lazy" decoding="async" width="768" height="1024" src="../../wp-content/uploads/2026/11/IMG_8281-768x1024.webp" class="attachment-large size-large wp-image-10236" alt="" srcset="../../wp-content/uploads/2026/11/IMG_8281-768x1024.webp 768w, ../../wp-content/uploads/2026/11/IMG_8281-225x300.webp 225w, ../../wp-content/uploads/2026/11/IMG_8281-1152x1536.webp 1152w, ../../wp-content/uploads/2026/11/IMG_8281-1536x2048.webp 1536w, ../../wp-content/uploads/2026/11/IMG_8281-450x600.webp 450w, ../../wp-content/uploads/2026/11/IMG_8281-scaled.webp 1920w" sizes="auto, (max-width: 768px) 100vw, 768px" /></noscript><img loading="lazy" loading="lazy" decoding="async" width="768" height="1024" src='data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20768%201024%22%3E%3C/svg%3E' data-src="../../wp-content/uploads/2026/11/IMG_8281-768x1024.webp" class=" lazy  attachment-large size-large wp-image-10236" alt=""  data-srcset="../../wp-content/uploads/2026/11/IMG_8281-768x1024.webp 768w, ../../wp-content/uploads/2026/11/IMG_8281-225x300.webp 225w, ../../wp-content/uploads/2026/11/IMG_8281-1152x1536.webp 1152w, ../../wp-content/uploads/2026/11/IMG_8281-1536x2048.webp 1536w, ../../wp-content/uploads/2026/11/IMG_8281-450x600.webp 450w, ../../wp-content/uploads/2026/11/IMG_8281-scaled.webp 1920w"  data-sizes="auto, (max-width: 768px) 100vw, 768px" />															</div>
 					</div>
 				</div>
 				</div>
