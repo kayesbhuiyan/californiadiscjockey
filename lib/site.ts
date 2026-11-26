@@ -6,7 +6,7 @@ import imageSizes from "@/lib/image-sizes.json";
 
 export const SITE_ORIGIN = "https://californiadiscjockey.com";
 /** Bump when scrub/CSS output changes so immutable `/_css` URLs invalidate. */
-export const CSS_BUNDLE_VERSION = "56";
+export const CSS_BUNDLE_VERSION = "58";
 let homeCriticalCssCache: string | null | undefined;
 
 const SITE_ROOT = path.join(process.cwd(), "html-site");
@@ -220,6 +220,9 @@ export function resolveRequest(pathname: string): Resolved | null {
   const decoded = decodePath(pathname);
   if (decoded.includes("\0") || decoded.split("/").includes("..")) return null;
 
+  // WP keeps /bay-area-dj/ as a page URL but canonicalizes it to the homepage.
+  if (/^\/bay-area-dj\/?$/i.test(decoded)) return { type: "redirect", to: "/" };
+
   if (decoded === "/sitemap.xml") return { type: "sitemap" };
   if (decoded === "/robots.txt") return { type: "robots" };
   if (decoded === "/favicon.ico") {
@@ -325,6 +328,24 @@ export function isTextAsset(file: string) {
   return extension === ".css" || extension === ".js" || extension === ".mjs" || extension === ".svg" || extension === ".map";
 }
 
+/** Map sister-site / Photon upload paths onto local /media when we host the file. */
+function localMediaPathFromForeign(pathname: string) {
+  let p = pathname;
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    /* keep encoded */
+  }
+  // Photon: /californiadiscjockey.com/wp-content/uploads/... or /californiadiscjockey.com/media/...
+  const photon = p.match(
+    /^\/(?:www\.)?californiadiscjockey\.com\/(?:wp-content\/uploads|media)\/(.+)$/i,
+  );
+  if (photon) return "/media/" + photon[1].split("?")[0];
+  const uploads = p.match(/^\/(?:wp-content\/uploads|media)\/(.+)$/i);
+  if (uploads) return "/media/" + uploads[1].split("?")[0];
+  return null;
+}
+
 function rewriteUrl(raw: string, pageUrl: URL) {
   const trimmed = raw.trim().replace(/&amp;/g, "&");
   if (!trimmed || trimmed.startsWith("#") || /^(mailto:|tel:|sms:|javascript:|data:)/i.test(trimmed)) {
@@ -338,7 +359,12 @@ function rewriteUrl(raw: string, pageUrl: URL) {
     return raw;
   }
 
-  const host = absolute.hostname.replace(/^www\./i, "");
+  const host = absolute.hostname.replace(/^www\./i, "").toLowerCase();
+  // Legacy sister domain + Jetpack Photon still point at the same upload library.
+  if (host === "djbayarea.com" || /\.wp\.com$/i.test(host)) {
+    const local = localMediaPathFromForeign(absolute.pathname);
+    if (local) return rewritePublicPath(local) + absolute.hash;
+  }
   if (host && host !== "californiadiscjockey.com") return raw;
 
   let pathname = absolute.pathname;
@@ -360,6 +386,12 @@ function rewriteUrl(raw: string, pageUrl: URL) {
     // Keep those on this site instead of emitting a dead absolute www URL.
     if (mirrorHostNorm === "californiadiscjockey.com") {
       pathname = "/" + segments.slice(1).join("/");
+    } else if (mirrorHostNorm === "djbayarea.com" || /\.wp\.com$/i.test(mirrorHostNorm)) {
+      // ../../djbayarea.com/wp-content/uploads/... or ../../i1.wp.com/californiadiscjockey.com/wp-content/...
+      const afterHost = "/" + segments.slice(1).join("/");
+      const mapped = localMediaPathFromForeign(afterHost);
+      if (mapped) pathname = mapped;
+      else return `https://${segments.join("/")}${absolute.search}${absolute.hash}`;
     } else {
       return `https://${segments.join("/")}${absolute.search}${absolute.hash}`;
     }
@@ -447,13 +479,17 @@ function rewriteAbsoluteAssetUrls(html: string) {
     .replace(/\/wp-content\/fonts\//gi, "/assets/fonts/");
 }
 
-function absolutizeMetaImages(html: string) {
+function absolutizeMetaImages(html: string, pageUrl: URL) {
   return html.replace(
     /<meta\b[^>]*(?:property|name)=(["'])(?:og:image(?::secure_url)?|twitter:image(?::src)?)\1[^>]*>/gi,
     (tag) => {
       const content = readAttr(tag, "content");
-      if (!content?.startsWith("/")) return tag;
-      return setAttr(tag, "content", `${SITE_ORIGIN}${content}`);
+      if (!content || /^(data:|#)/i.test(content)) return tag;
+      // HTTrack left many og:image values as ../wp-content/uploads/... — resolve then absolutize.
+      const rewritten = rewriteUrl(content, pageUrl);
+      if (rewritten.startsWith("/")) return setAttr(tag, "content", `${SITE_ORIGIN}${rewritten}`);
+      if (/^https?:\/\//i.test(rewritten)) return setAttr(tag, "content", rewritten);
+      return tag;
     },
   );
 }
@@ -1537,7 +1573,7 @@ export function rewriteHtml(
   next = next.replace(/<!--[\s\S]*?-->/g, "");
   next = revealLazyImages(next);
   next = forceSeoUrls(next, canonical);
-  next = absolutizeMetaImages(next);
+  next = absolutizeMetaImages(next, pageUrl);
   if (options?.blockIndexing) next = forceNoindex(next, "noindex, nofollow");
   else if (noindex) next = forceNoindex(next);
   next = optimizeHtml(next, canonicalPath);
@@ -1548,6 +1584,9 @@ export function rewriteHtml(
     .replace(/https?:\\\/\\\/(?:www\.)?californiadiscjockey\.com\\\/wp-content\\\/uploads\\\//gi, "https:\\/\\/californiadiscjockey.com\\/media\\/")
     .replace(/https?:\/\/(?:www\.)?californiadiscjockey\.com\/wp-content\/uploads\/elementor\//gi, "https://californiadiscjockey.com/assets/layout/")
     .replace(/https?:\/\/(?:www\.)?californiadiscjockey\.com\/wp-content\/uploads\//gi, "https://californiadiscjockey.com/media/")
+    .replace(/https?:\\\/\\\/i\d+\.wp\.com\\\/(?:www\.)?californiadiscjockey\.com\\\/(?:wp-content\\\/uploads|media)\\\//gi, "https:\\/\\/californiadiscjockey.com\\/media\\/")
+    .replace(/https?:\/\/i\d+\.wp\.com\/(?:www\.)?californiadiscjockey\.com\/(?:wp-content\/uploads|media)\//gi, "https://californiadiscjockey.com/media/")
+    .replace(/https?:\/\/(?:www\.)?djbayarea\.com\/(?:wp-content\/uploads|media)\//gi, "https://californiadiscjockey.com/media/")
     .replace(/\/wp-content\/uploads\/elementor\//gi, "/assets/layout/")
     .replace(/\/wp-content\/uploads\//gi, "/media/")
     .replace(/\sclass=(["'])yoast-schema-graph\1/gi, ' class="schema-graph"')
