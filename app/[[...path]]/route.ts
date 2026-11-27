@@ -1,4 +1,5 @@
-import { createReadStream, readFileSync } from "fs";
+import { createReadStream, existsSync, readFileSync } from "fs";
+import path from "path";
 import { Readable } from "stream";
 import {
   CSS_BUNDLE_VERSION,
@@ -13,6 +14,11 @@ import {
   renderPageCss,
   rewriteHtml,
 } from "@/lib/site";
+
+/** Exact Google Search Console HTML ownership tokens (filename → body). */
+const GOOGLE_SITE_VERIFICATION: Record<string, string> = {
+  "/google11d6dcb338367639.html": "google-site-verification: google11d6dcb338367639.html",
+};
 
 export const runtime = "nodejs";
 export const revalidate = 300;
@@ -98,6 +104,15 @@ function notFound(blockIndexing = false) {
 async function serve(request: Request) {
   const url = new URL(request.url);
   const blockIndexing = blockIndexingFor(request);
+
+  // Google Search Console HTML ownership — exact body, no HTML rewrite.
+  const googleVerify = GOOGLE_SITE_VERIFICATION[url.pathname.toLowerCase()];
+  if (googleVerify) {
+    const file = path.join(process.cwd(), "public", path.basename(url.pathname));
+    const body = existsSync(file) ? readFileSync(file, "utf8") : googleVerify;
+    return textResponse(body, "text/html; charset=utf-8");
+  }
+
   if (url.pathname === "/_css") {
     const page = url.searchParams.get("p") || "/";
     const kind = url.searchParams.get("k") === "defer" ? "defer" : "block";
