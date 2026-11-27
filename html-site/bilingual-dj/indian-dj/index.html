@@ -1456,7 +1456,7 @@ ul {
 
 
 div#bay-area-dj-page {
-    padding: 10px !important;
+    padding: 0 10px 10px !important;
 }
 
 
@@ -1762,11 +1762,6 @@ a {
 <article id="post-4290" class="post-4290 page type-page status-publish">
 
 	
-	<header class="entry-header">
-
-		<h1 class="page-title">Indian DJ</h1>
-	</header><!-- .entry-header -->
-
 	<div class="entry-content clearfix">
 
 				<div data-elementor-type="wp-page" data-elementor-id="4290" class="elementor elementor-4290">
@@ -2854,21 +2849,51 @@ body:has(#bay-area-dj-page) #bay-area-dj-page{overflow-y:visible!important;max-h
 
 .dj-heading{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;font-weight:700!important;overflow-wrap:break-word;}
 
+/* Page title shares the same content column as Bay Area Indian DJ */
+#bay-area-dj-page > h1.page-title,
+#bay-area-dj-page > h1.post-title{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+  margin:0 0 .5rem!important;
+  padding:0!important;
+  background:transparent!important;
+  border:0!important;
+  font-size:clamp(2.75rem,4.5vw,3.5rem)!important;
+  line-height:1.1!important;
+  font-weight:700!important;
+  text-align:left!important;
+  text-transform:none!important;
+  color:#111!important;
+}
+body:has(#bay-area-dj-page) :is(.entry-header,.post-header):not(:has(+ *)){display:none!important}
+body:has(#bay-area-dj-page) :is(.site-content,#content.site-content){padding-top:0!important;margin-top:0!important}
+body:has(#bay-area-dj-page) :is(article.type-page,.type-page,#primary,.content-area,.site-main,.entry-content,.elementor,.e-con,.e-con-inner,.elementor-widget,.elementor-widget-container){margin-top:0!important;padding-top:0!important}
+#bay-area-dj-page{padding-top:0!important;margin-top:0!important}
+#bay-area-dj-page > h1.page-title,
+#bay-area-dj-page > h1.post-title{margin-top:0!important;margin-bottom:.35rem!important;padding-top:0!important}
+#bay-area-dj-page > h2.dj-heading:first-of-type{margin-top:.2rem!important}
+body:has(#bay-area-dj-page) .entry-content p:empty,
+body:has(#bay-area-dj-page) .elementor-widget-text-editor > p:empty{display:none!important;margin:0!important;padding:0!important;height:0!important}
+
 /* Heading hierarchy: h1 > h2 > h3 > h4 > h5 > h6 */
-body:has(#bay-area-dj-page) h1.page-title,
-#bay-area-dj-page h1,
-.entry-content:has(#bay-area-dj-page) h1{font-size:clamp(3rem,5vw,4rem)!important;line-height:1.1!important;font-weight:700!important;margin:0 0 .9rem!important;}
+#bay-area-dj-page > h1.page-title,
+#bay-area-dj-page > h1.post-title{font-size:clamp(2.75rem,4.5vw,3.5rem)!important;line-height:1.1!important;font-weight:700!important;}
 #bay-area-dj-page h2,
 .entry-content:has(#bay-area-dj-page) h2,
-.entry-content:has(#bay-area-dj-page) .elementor-heading-title{font-size:clamp(2.4rem,4vw,3.15rem)!important;line-height:1.15!important;font-weight:700!important;margin:1.7rem 0 .75rem!important;}
+.entry-content:has(#bay-area-dj-page) .elementor-heading-title{font-size:clamp(2.1rem,3.2vw,2.6rem)!important;line-height:1.15!important;font-weight:700!important;margin:1.5rem 0 .7rem!important;}
+#bay-area-dj-page > h2.dj-heading:first-of-type{margin-top:.35rem!important;}
 #bay-area-dj-page h3,
-.entry-content:has(#bay-area-dj-page) h3{font-size:clamp(2rem,3.2vw,2.5rem)!important;line-height:1.2!important;font-weight:700!important;margin:1.45rem 0 .65rem!important;}
+.entry-content:has(#bay-area-dj-page) h3,
+#bay-area-dj-page h5.dj-heading,
+#bay-area-dj-page h6.dj-heading{font-size:clamp(1.7rem,2.5vw,2.1rem)!important;line-height:1.2!important;font-weight:700!important;margin:1.35rem 0 .6rem!important;}
 #bay-area-dj-page h4,
-.entry-content:has(#bay-area-dj-page) h4{font-size:clamp(1.65rem,2.5vw,2rem)!important;line-height:1.25!important;font-weight:700!important;margin:1.25rem 0 .55rem!important;}
-#bay-area-dj-page h5,
-.entry-content:has(#bay-area-dj-page) h5{font-size:clamp(1.4rem,2vw,1.65rem)!important;line-height:1.3!important;font-weight:700!important;margin:1.1rem 0 .5rem!important;}
-#bay-area-dj-page h6,
-.entry-content:has(#bay-area-dj-page) h6{font-size:clamp(1.2rem,1.5vw,1.35rem)!important;line-height:1.35!important;font-weight:700!important;margin:1rem 0 .45rem!important;}
+.entry-content:has(#bay-area-dj-page) h4{font-size:clamp(1.4rem,2vw,1.7rem)!important;line-height:1.25!important;font-weight:700!important;margin:1.2rem 0 .55rem!important;}
+#bay-area-dj-page h5:not(.dj-heading),
+.entry-content:has(#bay-area-dj-page) h5:not(.dj-heading){font-size:clamp(1.2rem,1.6vw,1.4rem)!important;line-height:1.3!important;font-weight:700!important;margin:1.05rem 0 .5rem!important;}
+#bay-area-dj-page h6:not(.dj-heading),
+.entry-content:has(#bay-area-dj-page) h6:not(.dj-heading){font-size:clamp(1.05rem,1.3vw,1.2rem)!important;line-height:1.35!important;font-weight:700!important;margin:.95rem 0 .45rem!important;}
 
 /* Q&A: left-aligned lists (override .entry-content.clearfix div center) */
 .entry-content .cdj-qa,
@@ -2887,6 +2912,7 @@ body:has(#bay-area-dj-page) h1.page-title,
 #dj-qa h2,#dj-qa h3,#dj-qa h4,#dj-qa h5,.cdj-qa h2,.cdj-qa h3,.cdj-qa h4,.cdj-qa h5{text-align:left!important;}
 </style>
 <div class="bay-area-dj" id="bay-area-dj-page">
+<h1 class="page-title dj-heading">Indian DJ</h1>
 <h2 class="dj-heading">Bay Area Indian DJ</h2>
 <section class="bay-area-indian-dj">
 Celebrate with DJ Jivan, your professional Bay Area Indian DJ for
@@ -2978,13 +3004,13 @@ Nationwide &amp; Destination events in the Bay Area, including San Francisco, Sa
 For the ultimate Indian party, dance to your favorite Bollywood Movies.
 
 We take pride in helping you enjoy watching the Indian or Punjabi films during dinner on our big screen.
-<h3 class="dj-heading"><a href="https://youtu.be/xzuoE0gIBoc?si=aF2zf8MEyRL9cnv0"><strong>Click Here — Symantec Diwali DJ</strong></a></h3>
+<h5 class="dj-heading"><a href="https://youtu.be/xzuoE0gIBoc?si=aF2zf8MEyRL9cnv0"><strong>Click Here — Symantec Diwali DJ</strong></a></h5>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/xzuoE0gIBoc?si=erF4uj-s9nBie8_u" title="Symantec Diwali DJ"></iframe></div>
 </div>
 Ensure to ask about our packages!
-<h3 class="dj-heading">2026 Birthday Party Cupertino</h3>
+<h5 class="dj-heading">2026 Birthday Party Cupertino</h5>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/EgmwxKTEnbQ?si=Baa16HhHm62iCwVL" title="Cupertino birthday party"></iframe></div>
@@ -2999,7 +3025,7 @@ Baby Showers • Corporate Events • Graduations • Holiday Events • Theme P
 <div class="dj-player dj-portrait">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/CmDAKLoJYr8" title="Bay Area Indian DJ YouTube Short CmDAKLoJYr8"></iframe></div>
 </div>
-<h3 class="dj-heading">Bay Area Indian DJ Bollywood 2016 Sunnyvale Jai Ho Restaurant</h3>
+<h6 class="dj-heading">Bay Area Indian DJ Bollywood 2016 Sunnyvale Jai Ho Restaurant</h6>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/BvKsRivA8LM?si=y7MlWMU7DY6XL0CK" title="Bollywood DJ, Sunnyvale Jai Ho Restaurant"></iframe></div>
@@ -3095,7 +3121,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 
 </div>
 &nbsp;
-<h3 class="dj-heading">Los Altos Bay Area Indian DJ</h3>
+<h6 class="dj-heading">Los Altos Bay Area Indian DJ</h6>
 &nbsp;
 <div class="dj-media">
 
