@@ -2846,22 +2846,45 @@ body:has(#bay-area-dj-page) #bay-area-dj-page{overflow-y:visible!important;max-h
 #bay-area-dj-page .dj-instagram{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;margin-inline:0!important;padding:0!important;float:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;}
 #bay-area-dj-page .dj-instagram .dj-ig-crop{display:block!important;position:relative!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important;padding:0!important;float:none!important;height:auto!important;aspect-ratio:16/9!important;overflow:hidden!important;background:#111!important;color-scheme:light!important;border:0!important;border-radius:0!important;box-shadow:none!important;}
 #bay-area-dj-page .dj-instagram .dj-ig-canvas{position:relative!important;inset:auto!important;display:block!important;width:100%!important;max-width:100%!important;height:auto!important;margin:0!important;padding:0!important;transform:none!important;}
-#bay-area-dj-page .dj-instagram .dj-ig-canvas iframe,#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite{display:block!important;position:relative!important;width:100%!important;max-width:100%!important;height:auto!important;aspect-ratio:16/9!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;}
-#bay-area-dj-page #dj-ig-party .dj-ig-canvas{transform:scale(tan(atan2(100vw,540px))) translateY(-54px)!important;}
+#bay-area-dj-page .dj-instagram .dj-ig-canvas iframe,#bay-area-dj-page .dj-instagram .dj-ig-canvas .cdj-lite,#bay-area-dj-page .dj-instagram .dj-ig-canvas video{display:block!important;position:relative!important;width:100%!important;max-width:100%!important;height:auto!important;aspect-ratio:16/9!important;margin:0!important;padding:0!important;border:0!important;float:none!important;transform:none!important;object-fit:cover!important;object-position:center center!important;}
+#bay-area-dj-page .dj-instagram,#bay-area-dj-page .dj-ig-crop,#bay-area-dj-page .dj-ig-canvas{width:100%!important;max-width:100%!important;margin-inline:0!important;}
+@media (max-width:600px){
+#bay-area-dj-page .dj-instagram,#bay-area-dj-page .dj-ig-crop,#bay-area-dj-page .dj-ig-canvas,#bay-area-dj-page .dj-instagram .cdj-lite,#bay-area-dj-page .dj-instagram video,#bay-area-dj-page .dj-instagram iframe{width:100vw!important;max-width:100vw!important;margin-left:calc(50% - 50vw)!important;margin-right:calc(50% - 50vw)!important;}
+}
 
 .dj-heading{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;font-weight:700!important;overflow-wrap:break-word;}
 
-/* Q&A: clean single-level lists with compact, consistent spacing */
-#dj-qa{margin-top:32px!important;margin-bottom:20px!important;}
-#dj-qa .dj-qa-songs{margin:0 0 20px!important;padding-left:1.6em!important;}
-#dj-qa .dj-qa-songs>li{margin:0 0 8px!important;padding:0!important;}
-#dj-qa .dj-qa-category{margin:0 0 20px!important;}
-#dj-qa .dj-qa-category ul{margin:0 0 12px!important;padding-left:1.3em!important;}
-#dj-qa .dj-qa-category li{margin:0 0 8px!important;}
-#dj-qa .dj-qa-list-title,#dj-qa .dj-qa-category-title{margin:0 0 12px!important;}
-#dj-qa .dj-qa-intro{margin:20px 0 16px!important;}
-#dj-qa .dj-qa-header h3{margin:0 0 16px!important;}
-#dj-qa #dj-qa-heading{margin:0 0 12px!important;}
+/* Heading hierarchy: h1 > h2 > h3 > h4 > h5 > h6 */
+body:has(#bay-area-dj-page) h1.page-title,
+#bay-area-dj-page h1,
+.entry-content:has(#bay-area-dj-page) h1{font-size:clamp(3rem,5vw,4rem)!important;line-height:1.1!important;font-weight:700!important;margin:0 0 .9rem!important;}
+#bay-area-dj-page h2,
+.entry-content:has(#bay-area-dj-page) h2,
+.entry-content:has(#bay-area-dj-page) .elementor-heading-title{font-size:clamp(2.4rem,4vw,3.15rem)!important;line-height:1.15!important;font-weight:700!important;margin:1.7rem 0 .75rem!important;}
+#bay-area-dj-page h3,
+.entry-content:has(#bay-area-dj-page) h3{font-size:clamp(2rem,3.2vw,2.5rem)!important;line-height:1.2!important;font-weight:700!important;margin:1.45rem 0 .65rem!important;}
+#bay-area-dj-page h4,
+.entry-content:has(#bay-area-dj-page) h4{font-size:clamp(1.65rem,2.5vw,2rem)!important;line-height:1.25!important;font-weight:700!important;margin:1.25rem 0 .55rem!important;}
+#bay-area-dj-page h5,
+.entry-content:has(#bay-area-dj-page) h5{font-size:clamp(1.4rem,2vw,1.65rem)!important;line-height:1.3!important;font-weight:700!important;margin:1.1rem 0 .5rem!important;}
+#bay-area-dj-page h6,
+.entry-content:has(#bay-area-dj-page) h6{font-size:clamp(1.2rem,1.5vw,1.35rem)!important;line-height:1.35!important;font-weight:700!important;margin:1rem 0 .45rem!important;}
+
+/* Q&A: left-aligned lists (override .entry-content.clearfix div center) */
+.entry-content .cdj-qa,
+.entry-content .cdj-qa *,
+.entry-content #dj-qa,
+.entry-content #dj-qa *,
+.entry-content.clearfix .cdj-qa,
+.entry-content.clearfix .cdj-qa *,
+.entry-content.clearfix #dj-qa,
+.entry-content.clearfix #dj-qa *,
+.entry-content.clearfix div:has(> .cdj-qa),
+.entry-content.clearfix div:has(> .cdj-qa) *{text-align:left!important;}
+#dj-qa,.cdj-qa{display:block;width:100%!important;max-width:none!important;margin:32px 0 20px!important;padding:0!important;text-align:left!important;}
+#dj-qa ol,.cdj-qa ol,#dj-qa ul,.cdj-qa ul{text-align:left!important;list-style-position:outside!important;margin:0 0 20px!important;padding-left:1.6em!important;}
+#dj-qa li,.cdj-qa li{text-align:left!important;display:list-item!important;margin:0 0 8px!important;padding:0!important;}
+#dj-qa h2,#dj-qa h3,#dj-qa h4,#dj-qa h5,.cdj-qa h2,.cdj-qa h3,.cdj-qa h4,.cdj-qa h5{text-align:left!important;}
 </style>
 <div class="bay-area-dj" id="bay-area-dj-page">
 <h2 class="dj-heading">Bay Area Indian DJ</h2>
@@ -2955,13 +2978,13 @@ Nationwide &amp; Destination events in the Bay Area, including San Francisco, Sa
 For the ultimate Indian party, dance to your favorite Bollywood Movies.
 
 We take pride in helping you enjoy watching the Indian or Punjabi films during dinner on our big screen.
-<h4 class="dj-heading"><a href="https://youtu.be/xzuoE0gIBoc?si=aF2zf8MEyRL9cnv0"><strong>Click Here — Symantec Diwali DJ</strong></a></h4>
+<h3 class="dj-heading"><a href="https://youtu.be/xzuoE0gIBoc?si=aF2zf8MEyRL9cnv0"><strong>Click Here — Symantec Diwali DJ</strong></a></h3>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/xzuoE0gIBoc?si=erF4uj-s9nBie8_u" title="Symantec Diwali DJ"></iframe></div>
 </div>
 Ensure to ask about our packages!
-<h5 class="dj-heading">2026 Birthday Party Cupertino</h5>
+<h3 class="dj-heading">2026 Birthday Party Cupertino</h3>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/EgmwxKTEnbQ?si=Baa16HhHm62iCwVL" title="Cupertino birthday party"></iframe></div>
@@ -2969,14 +2992,14 @@ Ensure to ask about our packages!
 We ensure to give our clients 100% satisfaction at every event.
 
 <a href="../../hindi/"><strong>CLICK HERE FOR INDIAN SONGLIST</strong></a>
-<h5 class="dj-heading">Bay Area DJ Specializing in All Occasions:</h5>
+<h3 class="dj-heading">Bay Area DJ Specializing in All Occasions:</h3>
 Corporate DJ • Baby Shower DJ • Birthday DJs • Class Reunions • Sweet Sixteens
 Baby Showers • Corporate Events • Graduations • Holiday Events • Theme Parties • Fashion Shows
 <div class="dj-media">
 <div class="dj-player dj-portrait">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/CmDAKLoJYr8" title="Bay Area Indian DJ YouTube Short CmDAKLoJYr8"></iframe></div>
 </div>
-<h5 class="dj-heading">Bay Area Indian DJ Bollywood 2016 Sunnyvale Jai Ho Restaurant</h5>
+<h3 class="dj-heading">Bay Area Indian DJ Bollywood 2016 Sunnyvale Jai Ho Restaurant</h3>
 <div class="dj-media">
 <div class="dj-player">
 <iframe allowfullscreen="" class="fitvidsignore" loading="lazy" src="https://www.youtube.com/embed/BvKsRivA8LM?si=y7MlWMU7DY6XL0CK" title="Bollywood DJ, Sunnyvale Jai Ho Restaurant"></iframe></div>
@@ -2988,7 +3011,7 @@ Celebrate weddings, birthdays, baby showers, and special occasions
     for Dhoom events, Baraat processions, Mehndi and Sangeet celebrations,
     Raas and Garba nights, and Sari ceremonies throughout San Francisco
     and the Bay Area, California.
-<h4>Multicultural Wedding &amp; Event DJ Services</h4>
+<h3>Multicultural Wedding &amp; Event DJ Services</h3>
 Music tailored to your traditions, culture, and celebration.
     Our multicultural DJ services welcome Indian, Persian, Arabic,
     Muslim, Sikh, Armenian, Russian, Romanian, Iraqi, Iranian,
@@ -3012,9 +3035,9 @@ Music tailored to your traditions, culture, and celebration.
 
 </div>
 &nbsp;
-<h5 class="dj-heading">NAMASTE — Indian Bhangra Punjabi Music Bollywood</h5>
+<h3 class="dj-heading">NAMASTE — Indian Bhangra Punjabi Music Bollywood</h3>
 &nbsp;
-<h5 class="dj-heading">Here is a Partial List of Artists:</h5>
+<h3 class="dj-heading">Here is a Partial List of Artists:</h3>
 &nbsp;
 <div class="dj-media">
 
@@ -3027,7 +3050,7 @@ Music tailored to your traditions, culture, and celebration.
 <div>
 
 &nbsp;
-<h5 class="dj-heading">Bay Area Bollywood &amp; Desi Wedding DJs</h5>
+<h3 class="dj-heading">Bay Area Bollywood &amp; Desi Wedding DJs</h3>
 &nbsp;
 
 Celebrate your wedding with professional Indian DJ and MC services, featuring Bollywood and Desi music tailored to your celebration.
@@ -3085,7 +3108,7 @@ Explore our exclusive wedding packages with LED dance floors, intelligent lighti
 				<div class="elementor-element elementor-element-a3fa477 elementor-widget elementor-widget-image" data-id="a3fa477" data-element_type="widget" data-e-type="widget" data-widget_type="image.default">
 															<noscript><img decoding="async" width="840" height="280" src="../../wp-content/uploads/2026/11/image-1024x341.webp" class="attachment-large size-large wp-image-10503" alt="" srcset="../../wp-content/uploads/2026/11/image-1024x341.webp 1024w, ../../wp-content/uploads/2026/11/image-300x100.webp 300w, ../../wp-content/uploads/2026/11/image-768x256.webp 768w, ../../wp-content/uploads/2026/11/image-1536x512.webp 1536w, ../../wp-content/uploads/2026/11/image-2048x683.webp 2048w, ../../wp-content/uploads/2026/11/image-600x200.webp 600w" sizes="(max-width: 840px) 100vw, 840px" /></noscript><img decoding="async" width="840" height="280" src='data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20840%20280%22%3E%3C/svg%3E' data-src="../../wp-content/uploads/2026/11/image-1024x341.webp" class=" lazy  attachment-large size-large wp-image-10503" alt=""  data-srcset="../../wp-content/uploads/2026/11/image-1024x341.webp 1024w, ../../wp-content/uploads/2026/11/image-300x100.webp 300w, ../../wp-content/uploads/2026/11/image-768x256.webp 768w, ../../wp-content/uploads/2026/11/image-1536x512.webp 1536w, ../../wp-content/uploads/2026/11/image-2048x683.webp 2048w, ../../wp-content/uploads/2026/11/image-600x200.webp 600w"  data-sizes="(max-width: 840px) 100vw, 840px" />															</div>
 				<div class="elementor-element elementor-element-1834ee4 elementor-widget elementor-widget-text-editor" data-id="1834ee4" data-element_type="widget" data-e-type="widget" data-widget_type="text-editor.default">
-									<section><h2>Q &amp; A</h2><h3>What Are Some of the Best Indian &amp; Punjabi Dance Songs?</h3><h4>Top 20 Bollywood Dance Tracks &amp; Lead Artists</h4><ol><li>Sher Khul Gaye – Vishal &amp; Shekhar, Benny Dayal, Shilpa Rao</li><li>Besharam Rang – Shilpa Rao, Caralisa Monteiro, Vishal &amp; Shekhar</li><li>Param Sundari – Shreya Ghoshal, A.R. Rahman</li><li>Badtameez Dil – Benny Dayal, Pritam</li><li>Ghungroo – Arijit Singh, Shilpa Rao, Vishal-Shekhar</li><li>Balam Pichkari – Vishal Dadlani, Shalmali Kholgade, Pritam</li><li>Gallan Goodiyaan – Yashita Yashpal Sharma, Manish Kumar Tipu, Farhan Akhtar</li><li>London Thumakda – Neha Kakkar, Sonu Kakkar, Labh Janjua</li><li>Kala Chashma – Badshah, Neha Kakkar, Amar Arshi</li><li>Aankh Marey – Neha Kakkar, Mika Singh, Kumar Sanu</li><li>Tamma Tamma Again – Badshah, Anuradha Paudwal, Bappi Lahiri</li><li>Kar Gayi Chull – Badshah, Fazilpuria, Neha Kakkar, Amaal Mallik</li><li>Bom Diggy Diggy – Zack Knight, Jasmin Walia</li><li>Nashe Si Chadh Gayi – Arijit Singh</li><li>Dilbar – Neha Kakkar, Dhvani Bhanushali, Ikka</li><li>Chogada – Darshan Raval, Asees Kaur</li><li>Abhi Toh Party Shuru Hui Hai – Badshah, Aastha Gill</li><li>Kamariya – Aastha Gill, Divya Kumar</li><li>What Jhumka? – Arijit Singh, Jonita Gandhi</li><li>Genda Phool – Badshah, Payal Dev</li></ol><h4>20 Punjabi Dance Tracks for US Events</h4><h5>Ultimate Dance Floor Anthems</h5><ol><li>Brown Munde – AP Dhillon, Gurinder Gill, Shinda Kahlon</li><li>Lover – Diljit Dosanjh</li><li>Tauba Tauba – Karan Aujla</li><li>High Rated Gabru – Guru Randhawa</li><li>Mundian To Bach Ke – Panjabi MC</li></ol><h5>Modern Urban &amp; Trap Hits</h5><ol start="6"><li>Excuses – AP Dhillon, Intense, Gurinder Gill</li><li>Softly – Karan Aujla</li><li>Born to Shine – Diljit Dosanjh</li><li>Elevated – Shubh</li><li>White Brown Black – Avvy Sra, Karan Aujla</li></ol><h5>High-Energy Bhangra &amp; Club Beats</h5><ol start="11"><li>Proper Patola – Diljit Dosanjh, Badshah</li><li>Na Ja – Pav Dharia</li><li>Illegal Weapon 2.0 – Jasmine Sandlas, Garry Sandhu</li><li>Coka – Sukh-E Muzical Doctorz</li><li>Satisfya – Imran Khan</li></ol><h5>Heavy Bass &amp; Party Classics</h5><ol start="16"><li>Angreji Beat – Yo Yo Honey Singh, Gippy Grewal</li><li>8 Asla – Sukha, Gurlez Akhtar</li><li>Same Beef – Bohemia, Sidhu Moose Wala</li><li>Sauda Khara Khara – Diljit Dosanjh, Sukhbir</li><li>Wakhra Swag – Navv Inder, Badshah</li></ol><h4>More Bollywood &amp; Bhangra Party Favorites</h4><ol><li>Tauba Tauba – Bad Newz</li><li>Morni Banke – Badhaai Ho</li><li>London Thumakda – Queen</li><li>Dhoom Machale – Sunidhi Chauhan</li><li>Subah Hone Na De – Desi Boyz</li><li>Mauja Hi Mauja – Jab We Met</li><li>Oh Ho Ho Ho (Remix) – Sukhbir, Ikka</li><li>Sauda Khara Khara – Good Newwz</li><li>Radha – Student of the Year</li><li>Munni Badnam Hui – Dabangg</li><li>Gur Nalon Ishq Mitha – Bally Sagoo feat. Malkit Singh (start at 11 seconds)</li><li>1 2 3 4 Get On the Dance Floor – Chennai Express</li><li>Ghunghat Bain – Ajay Hooda, Ruchika Jangid, Surender Romio</li><li>Beware – Panjabi MC feat. Jay-Z</li><li>Abhi Toh Party Shuru Hui Hai – Khoobsurat</li><li>Twist – Love Aaj Kal</li><li>Nagada Nagada – Jab We Met</li><li>Where’s the Party Tonight – Kabhi Alvida Na Kehna</li><li>Gal Ban Gayee – Sukhbir</li><li>Lungi Dance – Chennai Express</li><li>Lat Lag Gayee – Race 2</li><li>Kajra Re – Bunty aur Babli</li><li>It’s the Time to Disco – KK, Shaan, Vasundhara Das, Loy Mendonsa</li><li>Gallan Goodiyaan – Dil Dhadakne Do – Yashita Sharma, Manish Kumar Tipu, Farhan Akhtar, Shankar Mahadevan, Sukhwinder Singh</li><li>Desi Girl – Shankar Mahadevan, Sunidhi Chauhan, Vishal Dadlani</li><li>Desi Boyz (Make Some Noise) – KK, Bob</li></ol></section>								</div>
+									<section class="cdj-qa" id="dj-qa"><h2>Q &amp; A</h2><h3>What Are Some of the Best Indian &amp; Punjabi Dance Songs?</h3><h4>Top 20 Bollywood Dance Tracks &amp; Lead Artists</h4><ol><li>Sher Khul Gaye – Vishal &amp; Shekhar, Benny Dayal, Shilpa Rao</li><li>Besharam Rang – Shilpa Rao, Caralisa Monteiro, Vishal &amp; Shekhar</li><li>Param Sundari – Shreya Ghoshal, A.R. Rahman</li><li>Badtameez Dil – Benny Dayal, Pritam</li><li>Ghungroo – Arijit Singh, Shilpa Rao, Vishal-Shekhar</li><li>Balam Pichkari – Vishal Dadlani, Shalmali Kholgade, Pritam</li><li>Gallan Goodiyaan – Yashita Yashpal Sharma, Manish Kumar Tipu, Farhan Akhtar</li><li>London Thumakda – Neha Kakkar, Sonu Kakkar, Labh Janjua</li><li>Kala Chashma – Badshah, Neha Kakkar, Amar Arshi</li><li>Aankh Marey – Neha Kakkar, Mika Singh, Kumar Sanu</li><li>Tamma Tamma Again – Badshah, Anuradha Paudwal, Bappi Lahiri</li><li>Kar Gayi Chull – Badshah, Fazilpuria, Neha Kakkar, Amaal Mallik</li><li>Bom Diggy Diggy – Zack Knight, Jasmin Walia</li><li>Nashe Si Chadh Gayi – Arijit Singh</li><li>Dilbar – Neha Kakkar, Dhvani Bhanushali, Ikka</li><li>Chogada – Darshan Raval, Asees Kaur</li><li>Abhi Toh Party Shuru Hui Hai – Badshah, Aastha Gill</li><li>Kamariya – Aastha Gill, Divya Kumar</li><li>What Jhumka? – Arijit Singh, Jonita Gandhi</li><li>Genda Phool – Badshah, Payal Dev</li></ol><h4>20 Punjabi Dance Tracks for US Events</h4><h5>Ultimate Dance Floor Anthems</h5><ol><li>Brown Munde – AP Dhillon, Gurinder Gill, Shinda Kahlon</li><li>Lover – Diljit Dosanjh</li><li>Tauba Tauba – Karan Aujla</li><li>High Rated Gabru – Guru Randhawa</li><li>Mundian To Bach Ke – Panjabi MC</li></ol><h5>Modern Urban &amp; Trap Hits</h5><ol start="6"><li>Excuses – AP Dhillon, Intense, Gurinder Gill</li><li>Softly – Karan Aujla</li><li>Born to Shine – Diljit Dosanjh</li><li>Elevated – Shubh</li><li>White Brown Black – Avvy Sra, Karan Aujla</li></ol><h5>High-Energy Bhangra &amp; Club Beats</h5><ol start="11"><li>Proper Patola – Diljit Dosanjh, Badshah</li><li>Na Ja – Pav Dharia</li><li>Illegal Weapon 2.0 – Jasmine Sandlas, Garry Sandhu</li><li>Coka – Sukh-E Muzical Doctorz</li><li>Satisfya – Imran Khan</li></ol><h5>Heavy Bass &amp; Party Classics</h5><ol start="16"><li>Angreji Beat – Yo Yo Honey Singh, Gippy Grewal</li><li>8 Asla – Sukha, Gurlez Akhtar</li><li>Same Beef – Bohemia, Sidhu Moose Wala</li><li>Sauda Khara Khara – Diljit Dosanjh, Sukhbir</li><li>Wakhra Swag – Navv Inder, Badshah</li></ol><h4>More Bollywood &amp; Bhangra Party Favorites</h4><ol><li>Tauba Tauba – Bad Newz</li><li>Morni Banke – Badhaai Ho</li><li>London Thumakda – Queen</li><li>Dhoom Machale – Sunidhi Chauhan</li><li>Subah Hone Na De – Desi Boyz</li><li>Mauja Hi Mauja – Jab We Met</li><li>Oh Ho Ho Ho (Remix) – Sukhbir, Ikka</li><li>Sauda Khara Khara – Good Newwz</li><li>Radha – Student of the Year</li><li>Munni Badnam Hui – Dabangg</li><li>Gur Nalon Ishq Mitha – Bally Sagoo feat. Malkit Singh (start at 11 seconds)</li><li>1 2 3 4 Get On the Dance Floor – Chennai Express</li><li>Ghunghat Bain – Ajay Hooda, Ruchika Jangid, Surender Romio</li><li>Beware – Panjabi MC feat. Jay-Z</li><li>Abhi Toh Party Shuru Hui Hai – Khoobsurat</li><li>Twist – Love Aaj Kal</li><li>Nagada Nagada – Jab We Met</li><li>Where’s the Party Tonight – Kabhi Alvida Na Kehna</li><li>Gal Ban Gayee – Sukhbir</li><li>Lungi Dance – Chennai Express</li><li>Lat Lag Gayee – Race 2</li><li>Kajra Re – Bunty aur Babli</li><li>It’s the Time to Disco – KK, Shaan, Vasundhara Das, Loy Mendonsa</li><li>Gallan Goodiyaan – Dil Dhadakne Do – Yashita Sharma, Manish Kumar Tipu, Farhan Akhtar, Shankar Mahadevan, Sukhwinder Singh</li><li>Desi Girl – Shankar Mahadevan, Sunidhi Chauhan, Vishal Dadlani</li><li>Desi Boyz (Make Some Noise) – KK, Bob</li></ol></section>								</div>
 					</div>
 				</div>
 		<div class="elementor-element elementor-element-a561d19 e-grid e-con-boxed e-con e-parent" data-id="a561d19" data-element_type="container" data-e-type="container">
